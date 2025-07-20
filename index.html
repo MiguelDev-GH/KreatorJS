@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KreatorJS - Visual JavaScript IDE</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Barra de ferramentas superior -->
+        <div id="toolbar">
+            <div class="toolbar-section">
+                <button id="btn-new" class="toolbar-btn" title="Novo Projeto">
+                    <span class="icon">📄</span> Novo
+                </button>
+                <button id="btn-open" class="toolbar-btn" title="Abrir Projeto">
+                    <span class="icon">📁</span> Abrir
+                </button>
+                <button id="btn-save" class="toolbar-btn" title="Salvar">
+                    <span class="icon">💾</span> Salvar
+                </button>
+            </div>
+            <div class="toolbar-section">
+                <button id="btn-run" class="toolbar-btn primary" title="Executar Aplicação">
+                    <span class="icon">▶️</span> Executar
+                </button>
+                <button id="btn-package" class="toolbar-btn" title="Empacotar Aplicação">
+                    <span class="icon">📦</span> Empacotar
+                </button>
+            </div>
+        </div>
+
+        <!-- Container principal -->
+        <div id="main-container">
+            <!-- Painel lateral esquerdo - Paleta de Componentes -->
+            <div id="left-panel" class="panel">
+                <div class="panel-header">
+                    <h3>Componentes</h3>
+                </div>
+                <div id="component-palette" class="palette">
+                    <!-- Componentes serão adicionados dinamicamente -->
+                </div>
+            </div>
+
+            <!-- Área central - Designer Visual -->
+            <div id="center-panel" class="panel">
+                <div class="panel-header">
+                    <h3>Designer Visual</h3>
+                    <div class="designer-controls">
+                        <button id="btn-grid" class="control-btn" title="Mostrar/Ocultar Grade">
+                            <span class="icon">⊞</span>
+                        </button>
+                        <button id="btn-clear" class="control-btn" title="Limpar Designer">
+                            <span class="icon">🗑️</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="visual-designer" class="designer-area">
+                    <!-- Área onde os componentes serão arrastados -->
+                    <div class="designer-canvas" id="designer-canvas">
+                        <div class="canvas-placeholder">
+                            <p>Arraste componentes da paleta para começar a criar sua aplicação</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Painel lateral direito - Inspetor de Objetos -->
+            <div id="right-panel" class="panel">
+                <div class="panel-header">
+                    <h3>Inspetor de Objetos</h3>
+                </div>
+                <div id="object-inspector" class="inspector">
+                    <div class="inspector-placeholder">
+                        <p>Selecione um componente para editar suas propriedades</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Painel inferior - Console/Output -->
+        <div id="bottom-panel" class="panel">
+            <div class="panel-header">
+                <h3>Console</h3>
+                <div class="console-controls">
+                    <button id="btn-clear-console" class="control-btn" title="Limpar Console">
+                        <span class="icon">🗑️</span>
+                    </button>
+                </div>
+            </div>
+            <div id="console-output" class="console">
+                <div class="console-line">KreatorJS v1.0.0 - Pronto para uso!</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para visualização de código -->
+    <div id="code-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Código Gerado</h3>
+                <button id="modal-close" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <textarea id="code-editor" readonly></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-copy-code" class="btn">Copiar Código</button>
+                <button id="btn-save-code" class="btn primary">Salvar Arquivo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="renderer.js"></script>
+</body>
+</html>
+
