@@ -19,6 +19,7 @@ let selectedComponent = null;
 let componentCounter = 0;
 let undoStack = [];
 let redoStack = [];
+let projectVariables = {};
 
 // Componentes disponíveis na paleta
 const componentLibrary = [
@@ -156,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeIDE();
     setupEventListeners();
     populateComponentPalette();
+    initializeVariablesPanel();
     logToConsole('KreatorJS inicializado com sucesso!', 'success');
 });
 
@@ -1861,70 +1863,54 @@ function createProjectFromTemplate(templateId) {
 
 async function openProject(projectPath) {
     try {
-        let filePath = projectPath;
-        
-        // Se não foi fornecido um caminho (chamada pelo botão Abrir), abrir dialog
-        if (!filePath) {
-            if (ipcRenderer) {
-                // Versão Electron
-                const result = await ipcRenderer.invoke("show-open-dialog", {
-                    filters: [
-                        { name: "Projetos KreatorJS", extensions: ["kjs"] },
-                        { name: "Todos os arquivos", extensions: ["*"] }
-                    ],
-                    properties: ["openFile"]
-                });
-                
-                if (result.canceled || result.filePaths.length === 0) return;
-                filePath = result.filePaths[0];
-            } else {
-                // Versão navegador - usar input file
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.kjs';
-                input.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            try {
-                                const projectData = JSON.parse(e.target.result);
-                                loadProjectFromData(projectData);
-                                logToConsole(`Projeto carregado: ${file.name}`, "success");
-                            } catch (error) {
-                                logToConsole(`Erro ao carregar projeto: ${error.message}`, "error");
-                            }
-                        };
-                        reader.readAsText(file);
-                    }
-                };
-                input.click();
-                return;
-            }
+        let filePath = typeof projectPath === 'string' ? projectPath : null;
+
+        if (!filePath && ipcRenderer) {
+            const result = await ipcRenderer.invoke("show-open-dialog", {
+                filters: [{ name: "Projetos KreatorJS", extensions: ["kjs"] }, { name: "Todos os arquivos", extensions: ["*"] }],
+                properties: ["openFile"]
+            });
+
+            if (result.canceled || result.filePaths.length === 0) return;
+            filePath = result.filePaths[0];
+        } else if (!filePath) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.kjs';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const projectData = JSON.parse(e.target.result);
+                            loadProjectFromData(projectData);
+                            logToConsole(`Projeto carregado: ${file.name}`, "success");
+                        } catch (error) {
+                            logToConsole(`Erro ao carregar projeto: ${error.message}`, "error");
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+            return;
         }
-        
-        if (ipcRenderer) {
-            // Ler arquivo do projeto (apenas no Electron)
+
+        if (ipcRenderer && filePath) {
             const readResult = await ipcRenderer.invoke("read-file", filePath);
-            
+
             if (!readResult.success) {
                 logToConsole(`Erro ao abrir projeto: ${readResult.error}`, "error");
                 return;
             }
-            
-            // Parse do JSON
+
             const projectData = JSON.parse(readResult.content);
             loadProjectFromData(projectData);
-            
-            // Atualizar estado
-            currentProject = {
-                path: filePath,
-                data: projectData
-            };
 
+            currentProject = { path: filePath, data: projectData };
             logToConsole(`Projeto carregado: ${filePath}`, "success");
         }
-        
     } catch (error) {
         logToConsole(`Erro ao abrir projeto: ${error.message}`, "error");
     }
@@ -3703,3 +3689,118 @@ function closeSelectOptionsEditor() {
     tempSelectOptions = [];
 }
 
+// Gerenciamento de Variáveis
+function initializeVariablesPanel() {
+    const variablesContent = document.getElementById('variables-content');
+    variablesContent.innerHTML = `
+        <div id="variable-list" style="margin-bottom: 15px;">
+            <!-- As variáveis serão listadas aqui -->
+        </div>
+        <div id="add-variable-form">
+            <input type="text" id="var-name" placeholder="Nome da Variável" class="property-input" style="margin-bottom: 5px;">
+            <input type="text" id="var-value" placeholder="Valor Inicial" class="property-input" style="margin-bottom: 5px;">
+            <select id="var-type" class="property-input" style="margin-bottom: 5px;">
+                <option value="string">Texto (String)</option>
+                <option value="number">Número (Number)</option>
+                <option value="boolean">Booleano (Boolean)</option>
+                <option value="object">Objeto (Object)</option>
+                <option value="array">Array</option>
+            </select>
+            <button id="btn-add-var" class="btn primary" style="width: 100%;">Adicionar Variável</button>
+        </div>
+    `;
+
+    document.getElementById('btn-add-var').addEventListener('click', addVariable);
+    renderVariableList();
+}
+
+function addVariable() {
+    const name = document.getElementById('var-name').value.trim();
+    const value = document.getElementById('var-value').value;
+    const type = document.getElementById('var-type').value;
+
+    if (!name || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+        logToConsole('Erro: Nome de variável inválido. Use apenas letras, números e underscores, e não comece com um número.', 'error');
+        return;
+    }
+
+    if (projectVariables[name]) {
+        logToConsole(`Erro: A variável "${name}" já existe.`, 'error');
+        return;
+    }
+
+    let parsedValue;
+    try {
+        switch (type) {
+            case 'string':
+                parsedValue = String(value);
+                break;
+            case 'number':
+                parsedValue = Number(value);
+                if (isNaN(parsedValue)) throw new Error('Valor inválido para número');
+                break;
+            case 'boolean':
+                parsedValue = value.toLowerCase() === 'true';
+                break;
+            case 'object':
+                parsedValue = JSON.parse(value);
+                break;
+            case 'array':
+                parsedValue = JSON.parse(value);
+                if (!Array.isArray(parsedValue)) throw new Error('Valor inválido para array');
+                break;
+        }
+    } catch (e) {
+        logToConsole(`Erro ao processar valor da variável: ${e.message}`, 'error');
+        return;
+    }
+
+    projectVariables[name] = {
+        type: type,
+        value: parsedValue
+    };
+
+    logToConsole(`Variável "${name}" adicionada com sucesso.`, 'success');
+    document.getElementById('var-name').value = '';
+    document.getElementById('var-value').value = '';
+    renderVariableList();
+}
+
+function renderVariableList() {
+    const variableList = document.getElementById('variable-list');
+    variableList.innerHTML = '';
+
+    if (Object.keys(projectVariables).length === 0) {
+        variableList.innerHTML = '<p style="color: #9d9d9d; font-size: 12px; text-align: center;">Nenhuma variável definida.</p>';
+        return;
+    }
+
+    for (const name in projectVariables) {
+        const variable = projectVariables[name];
+        const item = document.createElement('div');
+        item.style.cssText = 'padding: 8px; border-bottom: 1px solid #3e3e42; font-size: 12px; display: flex; justify-content: space-between; align-items: center;';
+
+        let displayValue = JSON.stringify(variable.value);
+        if (displayValue.length > 20) {
+            displayValue = displayValue.substring(0, 20) + '...';
+        }
+
+        item.innerHTML = `
+            <div>
+                <strong style="color: #9cdcfe;">${name}</strong>
+                <span style="color: #ce9178;">(${variable.type})</span>
+                <span style="color: #b5cea8;">= ${displayValue}</span>
+            </div>
+            <button onclick="removeVariable('${name}')" style="background: #dc3545; color: white; border: none; padding: 2px 6px; border-radius: 3px; cursor: pointer;">🗑️</button>
+        `;
+        variableList.appendChild(item);
+    }
+}
+
+function removeVariable(name) {
+    if (projectVariables[name] && confirm(`Tem certeza que deseja remover a variável "${name}"?`)) {
+        delete projectVariables[name];
+        logToConsole(`Variável "${name}" removida.`, 'info');
+        renderVariableList();
+    }
+}
