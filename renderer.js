@@ -186,6 +186,7 @@ function setupEventListeners() {
     // Controles do designer
     document.getElementById('btn-grid').addEventListener('click', toggleGrid);
     document.getElementById('btn-clear').addEventListener('click', clearDesigner);
+    document.getElementById('btn-clear-all').addEventListener('click', clearAll);
     document.getElementById('btn-clear-console').addEventListener('click', clearConsole);
     
     // Modal de código
@@ -1828,15 +1829,15 @@ function createProjectFromTemplate(templateId) {
     const template = projectTemplates.find(t => t.id === templateId);
     if (!template) return;
     
-    if (currentProject || document.querySelectorAll('.designer-component').length > 0) {
+    if (currentProject || document.querySelectorAll('.designer-component').length > 0 || Object.keys(projectVariables).length > 0) {
         if (!confirm('Criar novo projeto? Todas as alterações não salvas serão perdidas.')) {
             return;
         }
     }
     
-    // Limpar designer
-    clearDesigner();
-    
+    // Limpar tudo
+    clearAll(false);
+
     // Resetar estado
     currentProject = null;
     componentCounter = 0;
@@ -1928,6 +1929,10 @@ function loadProjectFromData(projectData) {
     
     // Carregar eventos
     componentEvents = projectData.events || {};
+
+    // Carregar variáveis
+    projectVariables = projectData.variables || {};
+    renderVariableList();
 }
 
 async function saveProject() {
@@ -2156,8 +2161,9 @@ function toggleGrid() {
     canvas.classList.toggle('show-grid');
 }
 
-function clearDesigner() {
-    if (confirm('Limpar designer? Todos os componentes serão removidos.')) {
+function clearDesigner(confirm = true) {
+    const doClear = confirm ? window.confirm('Limpar designer? Todos os componentes serão removidos.') : true;
+    if (doClear) {
         const canvas = document.getElementById('designer-canvas');
         const components = canvas.querySelectorAll('.designer-component');
         components.forEach(component => component.remove());
@@ -2170,6 +2176,17 @@ function clearDesigner() {
         selectComponent(null);
         saveState();
         logToConsole('Designer limpo', 'success');
+    }
+}
+
+function clearAll(confirm = true) {
+    const doClear = confirm ? window.confirm('Limpar todo o projeto? Isso removerá todos os componentes e variáveis.') : true;
+    if (doClear) {
+        clearDesigner(false); // Limpa o designer sem confirmação adicional
+        projectVariables = {};
+        renderVariableList(); // Apenas renderiza a lista vazia
+        // O listener do botão de adicionar não precisa ser re-adicionado se o botão não for recriado
+        logToConsole('Projeto limpo.', 'success');
     }
 }
 
@@ -2476,7 +2493,8 @@ function collectProjectData() {
         description: currentProject?.data?.description || "",
         componentCounter: componentCounter,
         components: [],
-        events: componentEvents || {}
+        events: componentEvents || {},
+        variables: projectVariables || {}
     };
     
     components.forEach(component => {
@@ -3701,8 +3719,15 @@ function initializeVariablesPanel() {
         </div>
     `;
 
-    document.getElementById('btn-show-add-var-modal').addEventListener('click', showAddVariableModal);
+    setupVariableButtonListener();
     renderVariableList();
+}
+
+function setupVariableButtonListener() {
+    const addButton = document.getElementById('btn-show-add-var-modal');
+    if (addButton) {
+        addButton.addEventListener('click', showAddVariableModal);
+    }
 }
 
 function addVariable() {
@@ -3759,7 +3784,7 @@ function addVariable() {
 
     logToConsole(`Variável "${name}" adicionada com sucesso.`, 'success');
     renderVariableList();
-    closeModal('add-variable-modal');
+    // O modal será fechado pelo listener de clique no botão de confirmação
 }
 
 function renderVariableList() {
@@ -3802,46 +3827,67 @@ function removeVariable(name) {
 }
 
 function showAddVariableModal() {
-    const modal = document.createElement('div');
-    modal.id = 'add-variable-modal';
-    modal.className = 'modal';
-    modal.style.display = 'block';
+    const modalId = 'add-variable-modal';
+    if (document.getElementById(modalId)) return;
 
-    modal.innerHTML = `
-        <div class="modal-content" style="max-width: 400px; height: auto;">
-            <div class="modal-header">
-                <h3>Adicionar Variável</h3>
-                <button class="close-btn" onclick="closeModal('add-variable-modal')">&times;</button>
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.style.zIndex = '1001';
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.maxWidth = '400px';
+    modalContent.style.height = 'auto';
+
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Adicionar Variável</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="property-item">
+                <label class="property-label">Nome da Variável</label>
+                <input type="text" id="modal-var-name" class="property-input">
             </div>
-            <div class="modal-body">
-                <div class="property-item">
-                    <label class="property-label">Nome da Variável</label>
-                    <input type="text" id="modal-var-name" class="property-input">
-                </div>
-                <div class="property-item">
-                    <label class="property-label">Valor Inicial</label>
-                    <input type="text" id="modal-var-value" class="property-input">
-                </div>
-                <div class="property-item">
-                    <label class="property-label">Tipo</label>
-                    <select id="modal-var-type" class="property-input">
-                        <option value="string">Texto (String)</option>
-                        <option value="number">Número (Number)</option>
-                        <option value="boolean">Booleano (Boolean)</option>
-                        <option value="object">Objeto (Object)</option>
-                        <option value="array">Array</option>
-                    </select>
-                </div>
+            <div class="property-item">
+                <label class="property-label">Valor Inicial</label>
+                <input type="text" id="modal-var-value" class="property-input">
             </div>
-            <div class="modal-footer">
-                <button class="btn" onclick="closeModal('add-variable-modal')">Cancelar</button>
-                <button id="btn-confirm-add-var" class="btn primary">Adicionar</button>
+            <div class="property-item">
+                <label class="property-label">Tipo</label>
+                <select id="modal-var-type" class="property-input">
+                    <option value="string">Texto (String)</option>
+                    <option value="number">Número (Number)</option>
+                    <option value="boolean">Booleano (Boolean)</option>
+                    <option value="object">Objeto (Object)</option>
+                    <option value="array">Array</option>
+                </select>
             </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Cancelar</button>
+            <button id="btn-confirm-add-var" class="btn primary">Adicionar</button>
         </div>
     `;
 
+    modal.appendChild(modalContent);
     document.body.appendChild(modal);
-    document.getElementById('btn-confirm-add-var').addEventListener('click', addVariable);
+
+    const closeModal = () => modal.remove();
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
+    modal.querySelector('#btn-confirm-add-var').addEventListener('click', () => {
+        addVariable();
+        closeModal();
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
 }
 
 function closeModal(modalId) {
