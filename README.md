@@ -1,9 +1,15 @@
 # KreatorJS - IDE Visual para JavaScript
 
+### ⚠ AVISO: 
+O programa ainda contém alguns bugs e algumas funcionalidades não estão disponíveis ainda, mas com o tempo, tudo será consertado. Apenas para avisar que a aplicação não está completa e está em fase de teste. Aceito comentários e críticas sobre o projeto.
+
 ## Visão Geral
 
 O KreatorJS é uma IDE visual completa para desenvolvimento de aplicações JavaScript. Permite criar interfaces de usuário através de drag-and-drop, configurar eventos de forma intuitiva e exportar projetos completos.
 
+## Uso básico
+
+- A ferramenta tem uma aba de **componentes** onde por lá, o usuário consegue mover para o designer visual, onde por lá você consegue posicioná-lo onde quiser, adiconar eventos, mudar o estilo e mais.
 
 ### Como criar a aplicação:
 
