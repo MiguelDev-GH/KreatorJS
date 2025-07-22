@@ -998,7 +998,7 @@ body {
     transition: all 0.2s;
     cursor: move;
     outline: 2px solid transparent; /* Usar outline para evitar problemas de layout */
-    outline-offset: 2px;
+    outline-offset: 4px;
 }
 
 .designer-component:hover {
