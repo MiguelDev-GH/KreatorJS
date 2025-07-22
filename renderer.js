@@ -166,7 +166,7 @@ function initializeIDE() {
     setupDesignerCanvas(canvas);
     
     // Configurar redimensionamento de painéis
-    setupPanelResize();
+    //setupPanelResize();
     
     // Estado inicial
     updateUI();
