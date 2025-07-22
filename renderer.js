@@ -164,9 +164,9 @@ function initializeIDE() {
     // Configurar área de design
     const canvas = document.getElementById('designer-canvas');
     setupDesignerCanvas(canvas);
-
-    //Para Funcionar o Resize dos paineis da inteface, retirar o comentário da linha abaixo:
-    //setupPanelResize()
+    
+    // Configurar redimensionamento de painéis
+    setupPanelResize();
     
     // Estado inicial
     updateUI();
@@ -2394,13 +2394,12 @@ function createResizer(panel1, panel2, direction) {
     const resizer = document.createElement('div');
     resizer.className = `panel-resizer ${direction}`;
     resizer.style.cssText = `
-    position: absolute;
-    background: rgba(0, 0, 0, 0); /* Torna o background completamente transparente */
-    /* ou: background: #333; para uma cor discreta */
-    cursor: ${direction === 'horizontal' ? 'col-resize' : 'row-resize'}; /* Mantenha o cursor para indicar que é arrastável */
-    z-index: 1000;
-    ${direction === 'horizontal' ? 'width: 2px; height: 100%; top: 0;' : 'height: 2px; width: 100%; left: 0;'} /* Opcional: diminua a largura/altura */
-`;
+        position: absolute;
+        background: #ddd;
+        cursor: ${direction === 'horizontal' ? 'col-resize' : 'row-resize'};
+        z-index: 1000;
+        ${direction === 'horizontal' ? 'width: 4px; height: 100%; top: 0;' : 'height: 4px; width: 100%; left: 0;'}
+    `;
     
     // Posicionar o resizer
     if (direction === 'horizontal') {
@@ -2463,14 +2462,20 @@ function updateUI() {
 // Log para console
 function logToConsole(message, type = 'info') {
     const consoleOutput = document.getElementById('console-output');
-    if (consoleOutput) {
-        const line = document.createElement('div');
-        line.className = `console-line ${type}`;
-        line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-        consoleOutput.appendChild(line);
-        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    if (!consoleOutput) {
+        // Fallback para console do navegador se o elemento não existir
+        console.log(`[KreatorJS] ${message}`);
+        return;
     }
-    // Sempre mostrar no console do navegador para debug
+    
+    const line = document.createElement('div');
+    line.className = `console-line ${type}`;
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    
+    consoleOutput.appendChild(line);
+    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+    
+    // Também mostrar no console do navegador para debug
     console.log(`[KreatorJS] ${message}`);
 }
 
@@ -3036,22 +3041,11 @@ function enableElement(id) {
 
 // Função para log no console (compatível com KreatorJS)
 function logToConsole(message, type) {
-    // Tenta encontrar o console do KreatorJS
-    const appConsole = window.parent.document.getElementById("console-output");
-    if (appConsole) {
-        const line = window.parent.document.createElement("div");
-        line.className = \`console-line \${type}\`;
-        line.textContent = \`[\${new Date().toLocaleTimeString()}] \${message}\`;
-        appConsole.appendChild(line);
-        appConsole.scrollTop = appConsole.scrollHeight;
-    } else {
-        // Fallback para o console do navegador se não estiver no KreatorJS
-        console.log(\`[App] \${message}\`);
-    }
+    console.log('[App] ' + message);
 }
 
 // Eventos dos componentes
-`
+`;
     
     components.forEach(component => {
         const componentId = component.dataset.componentId;
@@ -3063,7 +3057,7 @@ function logToConsole(message, type) {
             js += `
 // Evento ${eventName} para ${componentId}
 function ${componentId}_${eventName}(event) {
-    console.log(\`Evento \${eventName} disparado para \${componentId}\`);
+    console.log('Evento ${eventName} disparado para ${componentId}');
     
 `;
             
@@ -3121,19 +3115,23 @@ function generateActionCode(action) {
         // Ação global
         switch (action.actionType) {
             case 'show_alert':
-                     code = `    alert(\'${escapedValue}\');\n`;
+                code = `    alert('${escapedValue}');\n`;
                 break;
             case 'console_log':
-          code = `logToConsole('${escapedValue}', 'info');\n`;
-          break;
+                code = `    logToConsole('${escapedValue}', 'info');\n`;
+                break;
+
             case 'redirect_page':
-                code = `    window.location.href = \'${escapedValue}\';\n`;
+                code = `    window.location.href = '${escapedValue}';\n`;
                 break;
         }
     } else {
-        // Ação para um elemento específico
+        // Ação em elemento específico
         switch (action.actionType) {
             case 'change_text':
+                code = `    changeText('${action.targetId}', '${escapedValue}');\n`;
+                break;
+            case 'change_value':
                 code = `    changeText('${action.targetId}', '${escapedValue}');\n`;
                 break;
             case 'change_checkbox_text':
@@ -3704,3 +3702,4 @@ function closeSelectOptionsEditor() {
     }
     tempSelectOptions = [];
 }
+

@@ -940,14 +940,12 @@ body {
 
 /* Estilos para redimensionadores de painéis */
 .panel-resizer {
-    background-color: #2d2d30;
-    border: 1px solid #2d2d30;
-    transition: background-color 0.2s, border-color 0.2s;
+    background-color: #3e3e42;
+    transition: background-color 0.2s;
 }
 
 .panel-resizer:hover {
     background-color: #007acc;
-    border-color: #007acc;
 }
 
 .panel-resizer.horizontal {
