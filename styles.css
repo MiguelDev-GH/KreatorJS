@@ -229,9 +229,9 @@ body {
 }
 
 .designer-component.selected {
-    border-color: #1177bb;
-    background-color: rgba(17, 119, 187, 0.15);
-    box-shadow: 0 0 0 1px rgba(17, 119, 187, 0.5);
+    border-color: #0099ff; /* Cor da borda mais clara e limpa */
+    background-color: transparent; /* Removido o fundo */
+    box-shadow: none; /* Removida a sombra */
 }
 
 .designer-component.dragging {
@@ -982,30 +982,18 @@ body {
 .designer-component {
     transition: all 0.2s;
     cursor: move;
+    border: 2px solid transparent; /* Adicionada uma borda transparente para evitar saltos */
 }
 
 .designer-component:hover {
-    outline: 2px dashed #007acc;
-    outline-offset: 2px;
+    border-color: rgba(0, 122, 204, 0.5); /* Mantém um feedback de hover sutil */
 }
 
 .designer-component.selected {
-    outline: 2px solid #007acc;
-    outline-offset: 2px;
+    border-color: #0099ff; /* Apenas a borda sólida ao selecionar */
 }
 
-.designer-component.selected::after {
-    content: '';
-    position: absolute;
-    top: -8px;
-    left: -8px;
-    right: -8px;
-    bottom: -8px;
-    border: 2px solid #007acc;
-    border-radius: 4px;
-    pointer-events: none;
-    z-index: 1000;
-}
+/* Removido o pseudo-elemento ::after que criava a borda externa */
 
 /* Melhorar resize handle */
 .resize-handle {
