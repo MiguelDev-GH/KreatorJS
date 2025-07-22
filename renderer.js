@@ -465,6 +465,11 @@ function preventDesignModeInteraction(wrapper) {
     const element = wrapper.firstElementChild;
     if (!element) return;
     
+    // Não aplicar a lógica de prevenção se o elemento estiver dentro de um modal
+    if (wrapper.closest('.modal')) {
+        return;
+    }
+    
     // Prevenir eventos padrão em elementos interativos durante o design
     const preventDefaultEvents = ['click', 'change', 'input', 'submit', 'focus', 'blur'];
     
