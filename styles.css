@@ -982,15 +982,16 @@ body {
 .designer-component {
     transition: all 0.2s;
     cursor: move;
-    border: 2px solid transparent; /* Adicionada uma borda transparente para evitar saltos */
+    outline: 2px solid transparent; /* Usar outline para evitar problemas de layout */
+    outline-offset: 2px;
 }
 
 .designer-component:hover {
-    border-color: rgba(0, 122, 204, 0.5); /* Mantém um feedback de hover sutil */
+    outline-color: rgba(0, 122, 204, 0.5); /* Feedback de hover com outline */
 }
 
 .designer-component.selected {
-    border-color: #0099ff; /* Apenas a borda sólida ao selecionar */
+    outline-color: #0099ff; /* Seleção com outline */
 }
 
 /* Removido o pseudo-elemento ::after que criava a borda externa */
