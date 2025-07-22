@@ -97,13 +97,28 @@ body {
     color: #cccccc;
 }
 
-/* Painel esquerdo - Paleta de Componentes */
-#left-panel {
+/* Coluna da Esquerda */
+#left-column {
+    display: flex;
+    flex-direction: column;
     width: 250px;
     min-width: 200px;
     max-width: 350px;
     resize: horizontal;
-    overflow: auto;
+    overflow: hidden;
+}
+
+/* Painel esquerdo - Paleta de Componentes */
+#left-panel {
+    flex: 1;
+    min-height: 200px; /* Altura mínima para o painel de componentes */
+}
+
+/* Painel de Variáveis */
+#variables-panel {
+    flex-shrink: 0;
+    height: 250px; /* Altura fixa para o painel de variáveis */
+    border-top: 1px solid #3e3e42;
 }
 
 .palette {
