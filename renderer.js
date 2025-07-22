@@ -3693,31 +3693,31 @@ function closeSelectOptionsEditor() {
 function initializeVariablesPanel() {
     const variablesContent = document.getElementById('variables-content');
     variablesContent.innerHTML = `
-        <div id="variable-list" style="margin-bottom: 15px;">
+        <div id="variable-list" style="margin-bottom: 15px; height: calc(100% - 50px); overflow-y: auto;">
             <!-- As variáveis serão listadas aqui -->
         </div>
-        <div id="add-variable-form">
-            <input type="text" id="var-name" placeholder="Nome da Variável" class="property-input" style="margin-bottom: 5px;">
-            <input type="text" id="var-value" placeholder="Valor Inicial" class="property-input" style="margin-bottom: 5px;">
-            <select id="var-type" class="property-input" style="margin-bottom: 5px;">
-                <option value="string">Texto (String)</option>
-                <option value="number">Número (Number)</option>
-                <option value="boolean">Booleano (Boolean)</option>
-                <option value="object">Objeto (Object)</option>
-                <option value="array">Array</option>
-            </select>
-            <button id="btn-add-var" class="btn primary" style="width: 100%;">Adicionar Variável</button>
+        <div id="add-variable-container" style="padding-top: 10px; border-top: 1px solid #3e3e42;">
+            <button id="btn-show-add-var-modal" class="btn primary" style="width: 100%;">Adicionar Variável</button>
         </div>
     `;
 
-    document.getElementById('btn-add-var').addEventListener('click', addVariable);
+    document.getElementById('btn-show-add-var-modal').addEventListener('click', showAddVariableModal);
     renderVariableList();
 }
 
 function addVariable() {
-    const name = document.getElementById('var-name').value.trim();
-    const value = document.getElementById('var-value').value;
-    const type = document.getElementById('var-type').value;
+    const nameInput = document.getElementById('modal-var-name');
+    const valueInput = document.getElementById('modal-var-value');
+    const typeInput = document.getElementById('modal-var-type');
+
+    if (!nameInput || !valueInput || !typeInput) {
+        logToConsole('Erro: Não foi possível encontrar os campos do modal.', 'error');
+        return;
+    }
+
+    const name = nameInput.value.trim();
+    const value = valueInput.value;
+    const type = typeInput.value;
 
     if (!name || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
         logToConsole('Erro: Nome de variável inválido. Use apenas letras, números e underscores, e não comece com um número.', 'error');
@@ -3740,13 +3740,13 @@ function addVariable() {
                 if (isNaN(parsedValue)) throw new Error('Valor inválido para número');
                 break;
             case 'boolean':
-                parsedValue = value.toLowerCase() === 'true';
+                parsedValue = value.toLowerCase() === 'true' || value === '1';
                 break;
             case 'object':
-                parsedValue = JSON.parse(value);
+                parsedValue = JSON.parse(value || '{}');
                 break;
             case 'array':
-                parsedValue = JSON.parse(value);
+                parsedValue = JSON.parse(value || '[]');
                 if (!Array.isArray(parsedValue)) throw new Error('Valor inválido para array');
                 break;
         }
@@ -3755,15 +3755,11 @@ function addVariable() {
         return;
     }
 
-    projectVariables[name] = {
-        type: type,
-        value: parsedValue
-    };
+    projectVariables[name] = { type, value: parsedValue };
 
     logToConsole(`Variável "${name}" adicionada com sucesso.`, 'success');
-    document.getElementById('var-name').value = '';
-    document.getElementById('var-value').value = '';
     renderVariableList();
+    closeModal('add-variable-modal');
 }
 
 function renderVariableList() {
@@ -3802,5 +3798,55 @@ function removeVariable(name) {
         delete projectVariables[name];
         logToConsole(`Variável "${name}" removida.`, 'info');
         renderVariableList();
+    }
+}
+
+function showAddVariableModal() {
+    const modal = document.createElement('div');
+    modal.id = 'add-variable-modal';
+    modal.className = 'modal';
+    modal.style.display = 'block';
+
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px; height: auto;">
+            <div class="modal-header">
+                <h3>Adicionar Variável</h3>
+                <button class="close-btn" onclick="closeModal('add-variable-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="property-item">
+                    <label class="property-label">Nome da Variável</label>
+                    <input type="text" id="modal-var-name" class="property-input">
+                </div>
+                <div class="property-item">
+                    <label class="property-label">Valor Inicial</label>
+                    <input type="text" id="modal-var-value" class="property-input">
+                </div>
+                <div class="property-item">
+                    <label class="property-label">Tipo</label>
+                    <select id="modal-var-type" class="property-input">
+                        <option value="string">Texto (String)</option>
+                        <option value="number">Número (Number)</option>
+                        <option value="boolean">Booleano (Boolean)</option>
+                        <option value="object">Objeto (Object)</option>
+                        <option value="array">Array</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeModal('add-variable-modal')">Cancelar</button>
+                <button id="btn-confirm-add-var" class="btn primary">Adicionar</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    document.getElementById('btn-confirm-add-var').addEventListener('click', addVariable);
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.remove();
     }
 }
