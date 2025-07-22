@@ -23,7 +23,7 @@
   ],
   "author": "KreatorJS Team",
   "license": "MIT",
-  "devDependencies": {
+  "dependencies": {
     "electron": "^32.2.6",
     "electron-builder": "^25.1.8"
   },
