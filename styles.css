@@ -216,8 +216,8 @@ body {
     cursor: pointer;
     user-select: none;
     transition: all 0.2s ease;
-    padding: 4px;
-    margin: -4px;
+    padding: 0; /* Removido o padding */
+    margin: 0;  /* Removida a margem negativa */
     border-radius: 4px;
     min-width: 20px;
     min-height: 20px;
