@@ -13,6 +13,8 @@ O KreatorJS é uma IDE visual completa para desenvolvimento de aplicações Java
 
 ### Como criar a aplicação:
 
+Abra um terminal na pasta do arquivo (Onde você pode localizar o index.html, renderer.js etc) e abra um terminal e coloque os seguintes comandos:
+
 ### Versão Electron (Desktop)
 ```bash
 npm install
