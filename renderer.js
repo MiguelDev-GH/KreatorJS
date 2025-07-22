@@ -1861,70 +1861,54 @@ function createProjectFromTemplate(templateId) {
 
 async function openProject(projectPath) {
     try {
-        let filePath = projectPath;
-        
-        // Se não foi fornecido um caminho (chamada pelo botão Abrir), abrir dialog
-        if (!filePath) {
-            if (ipcRenderer) {
-                // Versão Electron
-                const result = await ipcRenderer.invoke("show-open-dialog", {
-                    filters: [
-                        { name: "Projetos KreatorJS", extensions: ["kjs"] },
-                        { name: "Todos os arquivos", extensions: ["*"] }
-                    ],
-                    properties: ["openFile"]
-                });
-                
-                if (result.canceled || result.filePaths.length === 0) return;
-                filePath = result.filePaths[0];
-            } else {
-                // Versão navegador - usar input file
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.kjs';
-                input.onchange = (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                            try {
-                                const projectData = JSON.parse(e.target.result);
-                                loadProjectFromData(projectData);
-                                logToConsole(`Projeto carregado: ${file.name}`, "success");
-                            } catch (error) {
-                                logToConsole(`Erro ao carregar projeto: ${error.message}`, "error");
-                            }
-                        };
-                        reader.readAsText(file);
-                    }
-                };
-                input.click();
-                return;
-            }
+        let filePath = typeof projectPath === 'string' ? projectPath : null;
+
+        if (!filePath && ipcRenderer) {
+            const result = await ipcRenderer.invoke("show-open-dialog", {
+                filters: [{ name: "Projetos KreatorJS", extensions: ["kjs"] }, { name: "Todos os arquivos", extensions: ["*"] }],
+                properties: ["openFile"]
+            });
+
+            if (result.canceled || result.filePaths.length === 0) return;
+            filePath = result.filePaths[0];
+        } else if (!filePath) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.kjs';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const projectData = JSON.parse(e.target.result);
+                            loadProjectFromData(projectData);
+                            logToConsole(`Projeto carregado: ${file.name}`, "success");
+                        } catch (error) {
+                            logToConsole(`Erro ao carregar projeto: ${error.message}`, "error");
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+            return;
         }
-        
-        if (ipcRenderer) {
-            // Ler arquivo do projeto (apenas no Electron)
+
+        if (ipcRenderer && filePath) {
             const readResult = await ipcRenderer.invoke("read-file", filePath);
-            
+
             if (!readResult.success) {
                 logToConsole(`Erro ao abrir projeto: ${readResult.error}`, "error");
                 return;
             }
-            
-            // Parse do JSON
+
             const projectData = JSON.parse(readResult.content);
             loadProjectFromData(projectData);
-            
-            // Atualizar estado
-            currentProject = {
-                path: filePath,
-                data: projectData
-            };
 
+            currentProject = { path: filePath, data: projectData };
             logToConsole(`Projeto carregado: ${filePath}`, "success");
         }
-        
     } catch (error) {
         logToConsole(`Erro ao abrir projeto: ${error.message}`, "error");
     }
