@@ -1,25 +1,59 @@
 # KreatorJS - IDE Visual para JavaScript
 
-### ⚠ AVISO: 
-O programa ainda contém alguns bugs e algumas funcionalidades não estão disponíveis ainda, mas com o tempo, tudo será consertado. Apenas para avisar que a aplicação não está completa e está em fase de teste. Aceito comentários e críticas sobre o projeto.
-
 ## Visão Geral
 
 O KreatorJS é uma IDE visual completa para desenvolvimento de aplicações JavaScript. Permite criar interfaces de usuário através de drag-and-drop, configurar eventos de forma intuitiva e exportar projetos completos.
 
-## Uso básico
+## Funcionalidades Implementadas
 
-- A ferramenta tem uma aba de **componentes** onde por lá, o usuário consegue mover para o designer visual, onde por lá você consegue posicioná-lo onde quiser, adiconar eventos, mudar o estilo e mais.
+### ✅ Funcionalidades Básicas
+- **Paleta de Componentes**: Botão, Campo de Texto, Rótulo, Painel, Imagem, Área de Texto
+- **Designer Visual**: Área de design com grid opcional e drag-and-drop
+- **Inspetor de Propriedades**: Edição em tempo real das propriedades dos componentes
+- **Console**: Log de ações e mensagens do sistema
 
-### Como criar a aplicação:
+### ✅ Gerenciamento de Projetos
+- **Novo Projeto**: Criação com templates pré-definidos (Projeto em Branco, Formulário de Contato, Dashboard)
+- **Salvar/Carregar**: Salvamento em formato JSON (.kreator)
+- **Exportação**: HTML, JavaScript e projeto completo
 
-Abra um terminal na pasta do arquivo (Onde você pode localizar o index.html, renderer.js etc) e abra um terminal e coloque os seguintes comandos:
+### ✅ Sistema de Eventos Intuitivo
+- **Lista de Eventos**: Eventos disponíveis por tipo de componente (click, mouseover, input, etc.)
+- **Seleção de Elementos Alvo**: Interface para escolher qual elemento será afetado
+- **Ações Configuráveis**: Alterar texto, cor, fundo, mostrar/ocultar, alertas, etc.
+- **Múltiplos Eventos**: Possibilidade de adicionar infinitos eventos por elemento
+- **Relacionamento entre Elementos**: Um elemento pode afetar outros elementos
+
+### ✅ Funcionalidades de Exportação/Importação
+- **Exportar HTML**: Gera código HTML completo
+- **Exportar JavaScript**: Gera código JS com eventos configurados
+- **Exportar Projeto Completo**: Inclui HTML, CSS, JS e README
+- **Salvar Projeto**: Formato JSON para reabrir no KreatorJS
+
+## Estrutura de Arquivos
+
+```
+KreatorJS/
+├── main.js                 # Processo principal do Electron
+├── index.html             # Interface principal (versão Electron)
+├── index-web.html         # Interface web (sem dependências Electron)
+├── renderer.js            # Lógica principal (versão Electron)
+├── renderer-web.js        # Lógica adaptada para web
+├── styles.css             # Estilos da interface
+├── package.json           # Configurações do projeto
+└── README.md             # Esta documentação
+```
+
+## Como Usar
 
 ### Versão Electron (Desktop)
 ```bash
 npm install
 npm start
 ```
+
+### Versão Web (Navegador)
+Abra o arquivo `index-web.html` em um navegador moderno.
 
 ## Funcionalidades Principais
 
@@ -84,6 +118,28 @@ Template com:
 - **HTML5/CSS3**: Interface do usuário
 - **JavaScript**: Lógica da aplicação
 - **JSON**: Formato de salvamento de projetos
+
+## Limitações da Versão Web
+
+A versão web (`index-web.html`) tem algumas limitações em relação à versão Electron:
+- Sistema de eventos simplificado (apenas alerta)
+- Salvamento via download do navegador
+- Sem acesso direto ao sistema de arquivos
+
+## Próximas Funcionalidades
+
+- [ ] Editor de eventos visual completo na versão web
+- [ ] Mais componentes (checkbox, radio, select)
+- [ ] Temas personalizáveis
+- [ ] Componentes customizados
+- [ ] Integração com APIs
+- [ ] Deploy automático
+
+## Suporte
+
+Para dúvidas ou problemas, consulte o console da aplicação que mostra logs detalhados de todas as operações.
+
+---
 
 **KreatorJS v1.0.0** - IDE Visual para JavaScript
 Desenvolvido com ❤️ para facilitar o desenvolvimento de interfaces web.

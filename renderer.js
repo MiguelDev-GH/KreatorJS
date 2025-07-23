@@ -466,7 +466,7 @@ function preventDesignModeInteraction(wrapper) {
     if (!element) return;
     
     // Não aplicar a lógica de prevenção se o elemento estiver dentro de um modal
-    if (wrapper.closest('.modal')) {
+    if (wrapper.closest('.modal-content')) {
         return;
     }
     
@@ -2181,17 +2181,15 @@ function clearDesigner(confirm = true) {
         selectComponent(null);
         saveState();
         logToConsole('Designer limpo', 'success');
+        closeAddVariableModal(); // Garante que o modal seja fechado
     }
 }
 
 function clearAll(confirm = true) {
     const doClear = confirm ? window.confirm('Limpar todo o projeto? Isso removerá todos os componentes e variáveis.') : true;
     if (doClear) {
-        clearDesigner(false); // Limpa o designer sem confirmação adicional
-        projectVariables = {};
-        renderVariableList(); // Apenas renderiza a lista vazia
-        // O listener do botão de adicionar não precisa ser re-adicionado se o botão não for recriado
-        logToConsole('Projeto limpo.', 'success');
+        // Forçar um re-render completo da aplicação
+        location.reload();
     }
 }
 
@@ -3731,6 +3729,7 @@ function initializeVariablesPanel() {
 function setupVariableButtonListener() {
     const addButton = document.getElementById('btn-show-add-var-modal');
     if (addButton) {
+        addButton.removeEventListener('click', showAddVariableModal);
         addButton.addEventListener('click', showAddVariableModal);
     }
 }
@@ -3789,7 +3788,11 @@ function addVariable() {
 
     logToConsole(`Variável "${name}" adicionada com sucesso.`, 'success');
     renderVariableList();
-    // O modal será fechado pelo listener de clique no botão de confirmação
+    
+    // Limpar campos para a próxima variável
+    nameInput.value = '';
+    valueInput.value = '';
+    nameInput.focus();
 }
 
 function renderVariableList() {
@@ -3880,23 +3883,37 @@ function showAddVariableModal() {
     modal.appendChild(modalContent);
     document.body.appendChild(modal);
 
-    const closeModal = () => modal.remove();
-    modal.querySelector('.close-btn').addEventListener('click', closeModal);
-    modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
-    modal.querySelector('#btn-confirm-add-var').addEventListener('click', () => {
-        addVariable();
-        closeModal();
-    });
+    const closeModalHandler = () => {
+        closeAddVariableModal();
+    };
 
-    modal.addEventListener('click', (e) => {
+    modal.querySelector(".close-btn").addEventListener("click", closeModalHandler);
+    modal.querySelector(".btn-cancel").addEventListener("click", closeModalHandler);
+    modal.querySelector("#btn-confirm-add-var").addEventListener("click", addVariable);
+
+    // Limpar campos ao abrir o modal
+    const nameInput = document.getElementById("modal-var-name");
+    const valueInput = document.getElementById("modal-var-value");
+    const typeInput = document.getElementById("modal-var-type");
+
+    if (nameInput) nameInput.value = "";
+    if (valueInput) valueInput.value = "";
+    if (typeInput) typeInput.value = "string"; // Default para string
+
+    // Focar no primeiro input após um pequeno delay para garantir que o modal esteja visível
+    setTimeout(() => {
+        if (nameInput) nameInput.focus();
+    }, 100);
+
+    modal.addEventListener("click", (e) => {
         if (e.target === modal) {
-            closeModal();
+            closeModalHandler();
         }
     });
 }
 
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
+function closeAddVariableModal() {
+    const modal = document.getElementById('add-variable-modal');
     if (modal) {
         modal.remove();
     }
