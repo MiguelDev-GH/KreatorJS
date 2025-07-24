@@ -1195,6 +1195,32 @@ function closeEventEditorModal() {
     }
 }
 
+// Função de confirmação personalizada
+function showCustomConfirm(title, text) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-confirm-modal');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const textEl = document.getElementById('confirm-modal-text');
+        const okBtn = document.getElementById('confirm-modal-ok');
+        const cancelBtn = document.getElementById('confirm-modal-cancel');
+        const closeBtn = document.getElementById('confirm-modal-close');
+
+        titleEl.textContent = title;
+        textEl.textContent = text;
+
+        modal.style.display = 'block';
+
+        const close = (value) => {
+            modal.style.display = 'none';
+            resolve(value);
+        };
+
+        okBtn.onclick = () => close(true);
+        cancelBtn.onclick = () => close(false);
+        closeBtn.onclick = () => close(false);
+    });
+}
+
 
 
 // Selecionar evento para edição
@@ -2166,10 +2192,9 @@ function toggleGrid() {
     canvas.classList.toggle('show-grid');
 }
 
-function clearDesigner(confirm = true) {
-    const doClear = confirm ? window.confirm('Limpar designer? Todos os componentes serão removidos.').focus() : true;
+async function clearDesigner(confirm = true) {
+    const doClear = confirm ? await showCustomConfirm('Limpar Designer', 'Todos os componentes serão removidos. Deseja continuar?') : true;
     if (doClear) {
-
         const canvas = document.getElementById('designer-canvas');
         const components = canvas.querySelectorAll('.designer-component');
         components.forEach(component => component.remove());
@@ -2187,8 +2212,8 @@ function clearDesigner(confirm = true) {
     }
 }
 
-function clearAll(confirm = true) {
-    const doClear = confirm ? window.confirm('Limpar todo o projeto? Isso removerá todos os componentes e variáveis.') : true;
+async function clearAll(confirm = true) {
+    const doClear = confirm ? await showCustomConfirm('Limpar Tudo', 'Limpar todo o projeto? Isso removerá todos os componentes e variáveis.') : true;
     if (doClear) {
         // Forçar um re-render completo da aplicação
         location.reload();

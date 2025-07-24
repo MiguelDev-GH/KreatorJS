@@ -130,5 +130,22 @@
 
     <!-- Scripts -->
     <script src="renderer.js"></script>
+
+    <!-- Modal de Confirmação -->
+    <div id="custom-confirm-modal" class="modal">
+        <div class="modal-content" style="max-width: 400px; height: auto;">
+            <div class="modal-header">
+                <h3 id="confirm-modal-title"></h3>
+                <button id="confirm-modal-close" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-modal-text"></p>
+            </div>
+            <div class="modal-footer">
+                <button id="confirm-modal-cancel" class="btn">Cancelar</button>
+                <button id="confirm-modal-ok" class="btn primary">OK</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
