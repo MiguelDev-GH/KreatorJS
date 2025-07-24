@@ -1925,7 +1925,7 @@ async function openProject(projectPath) {
 // Função auxiliar para carregar projeto a partir dos dados
 function loadProjectFromData(projectData) {
     // Limpar designer atual
-    clearDesigner();
+    clearDesigner(false);
     
     // Carregar componentes
     loadProjectComponents(projectData.components);
@@ -2167,8 +2167,9 @@ function toggleGrid() {
 }
 
 function clearDesigner(confirm = true) {
-    const doClear = confirm ? window.confirm('Limpar designer? Todos os componentes serão removidos.') : true;
+    const doClear = confirm ? window.confirm('Limpar designer? Todos os componentes serão removidos.').focus() : true;
     if (doClear) {
+
         const canvas = document.getElementById('designer-canvas');
         const components = canvas.querySelectorAll('.designer-component');
         components.forEach(component => component.remove());
@@ -2181,6 +2182,7 @@ function clearDesigner(confirm = true) {
         selectComponent(null);
         saveState();
         logToConsole('Designer limpo', 'success');
+        document.body.focus()
         closeAddVariableModal(); // Garante que o modal seja fechado
     }
 }
