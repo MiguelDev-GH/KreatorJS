@@ -3871,7 +3871,7 @@ function addVariable() {
     // Limpar campos para a próxima variável
     nameInput.value = '';
     valueInput.value = '';
-    nameInput.focus();
+    closeAddVariableModal()
 }
 
 function renderVariableList() {
@@ -3905,8 +3905,9 @@ function renderVariableList() {
     }
 }
 
-function removeVariable(name) {
-    if (projectVariables[name] && confirm(`Tem certeza que deseja remover a variável "${name}"?`)) {
+async function removeVariable(name, confirm = true) {
+    const remover = confirm ? await window.showCustomConfirm("Remover Variável",`Tem certeza que deseja remover a variável "${name}"?`) : true
+    if (remover) {
         delete projectVariables[name];
         logToConsole(`Variável "${name}" removida.`, 'info');
         renderVariableList();
