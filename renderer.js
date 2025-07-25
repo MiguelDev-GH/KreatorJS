@@ -994,8 +994,7 @@ function updateComponentProperty(property, value) {
 function populateGlobalInspector() {
     const inspector = document.getElementById("object-inspector");
     const canvas = document.getElementById('designer-canvas');
-    //const currentBgColor = rgbToHex(window.getComputedStyle(canvas).backgroundColor) || globalProjectSettings.backgroundColor;
-    const currentBgColor = rgbToHex("rgb(255,255,255)")
+    const currentBgColor = rgbToHex(window.getComputedStyle(canvas).backgroundColor) || globalProjectSettings.backgroundColor;
 
     inspector.innerHTML = `
         <div class="property-group">
