@@ -1808,7 +1808,7 @@ const projectTemplates = [
                 type: 'label',
                 position: { x: 50, y: 50 },
                 size: { width: 'auto', height: 'auto' },
-                properties: { text: 'Nome:', fontSize: '16px', fontWeight: 'bold' },
+                properties: { text: 'Nome:', fontSize: '16px', fontWeight: 'bold', color: '#000000' },
                 events: {}
             },
             {
@@ -1824,7 +1824,7 @@ const projectTemplates = [
                 type: 'label',
                 position: { x: 50, y: 130 },
                 size: { width: 'auto', height: 'auto' },
-                properties: { text: 'Email:', fontSize: '16px', fontWeight: 'bold' },
+                properties: { text: 'Email:', fontSize: '16px', fontWeight: 'bold', color: '#000000' },
                 events: {}
             },
             {
@@ -1840,7 +1840,7 @@ const projectTemplates = [
                 type: 'label',
                 position: { x: 50, y: 210 },
                 size: { width: 'auto', height: 'auto' },
-                properties: { text: 'Mensagem:', fontSize: '16px', fontWeight: 'bold' },
+                properties: { text: 'Mensagem:', fontSize: '16px', fontWeight: 'bold', color: '#000000' },
                 events: {}
             },
             {
@@ -1865,13 +1865,16 @@ const projectTemplates = [
         id: 'dashboard',
         name: 'Dashboard Simples',
         description: 'Template com layout de dashboard',
+        globalSettings: {
+            backgroundColor: '#000000'
+        },
         components: [
             {
                 id: 'div_1',
                 type: 'div',
                 position: { x: 20, y: 20 },
                 size: { width: '760px', height: '60px' },
-                properties: { backgroundColor: '#2c3e50', borderRadius: '8px' },
+                properties: { backgroundColor: '#000000', borderRadius: '8px' },
                 events: {}
             },
             {
@@ -2069,6 +2072,16 @@ async function createProjectFromTemplate(templateId) {
 
     // O estado já foi resetado pelo clearAll.
     // Agora, apenas carregamos os componentes do template.
+
+    // Aplicar configurações globais do template, se existirem
+    if (template.globalSettings) {
+        Object.assign(globalProjectSettings, template.globalSettings);
+        const canvas = document.getElementById('designer-canvas');
+        if (canvas && template.globalSettings.backgroundColor) {
+            canvas.style.backgroundColor = template.globalSettings.backgroundColor;
+        }
+        populateGlobalInspector(); // Atualiza o inspetor com a nova cor
+    }
     
     // Carregar componentes do template
     if (template.components.length > 0) {
@@ -2435,7 +2448,7 @@ async function clearAll(confirm = true) {
             placeholder.style.display = 'block';
         }
         selectComponent(null);
-
+        
         // Resetar estado do projeto
         currentProject = null;
         componentCounter = 0;
@@ -2446,12 +2459,12 @@ async function clearAll(confirm = true) {
         globalEvents = {};
         globalProjectSettings = { backgroundColor: '#ffffff' };
         canvas.style.backgroundColor = globalProjectSettings.backgroundColor;
-
+        
         // Atualizar UIs
         renderVariableList();
         populateGlobalInspector();
         logToConsole('Projeto limpo e estado reiniciado.', 'success');
-
+        
         // Salvar o estado limpo para o histórico de undo
         saveState();
     }
