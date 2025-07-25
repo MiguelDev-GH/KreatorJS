@@ -1063,7 +1063,8 @@ const eventSystem = {
         global: [
             { id: 'show_alert', name: 'Mostrar alerta', description: 'Exibir uma mensagem de alerta' },
             { id: 'console_log', name: 'Log no console', description: 'Escrever mensagem no console do programa' },
-            { id: 'redirect_page', name: 'Redirecionar página', description: 'Navegar para outra página' }
+            { id: 'redirect_page', name: 'Redirecionar página', description: 'Navegar para outra página' },
+            { id: 'manipulate_variable', name: 'Manipular variáveis', description: 'Alterar o valor de uma variável' }
         ]
     }
 };
@@ -1231,7 +1232,88 @@ function closeEventEditorModal() {
     }
 }
 
+function showManipulateVariableModal(callback) {
+    const modalId = 'manipulate-variable-modal';
+    if (document.getElementById(modalId)) return;
 
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.style.zIndex = '10001'; // Ensure it's on top of the event editor
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.maxWidth = '500px';
+    modalContent.style.height = 'auto';
+
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Manipular Variável</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="property-item">
+                <label class="property-label">Variável</label>
+                <select id="modal-manip-var-name" class="property-input">
+                    ${Object.keys(projectVariables).map(name => `<option value="${name}">${name}</option>`).join('')}
+                </select>
+            </div>
+            <div class="property-item">
+                <label class="property-label">Operação</label>
+                <select id="modal-manip-var-op" class="property-input">
+                    <option value="set">Definir (=)</option>
+                    <option value="add">Adicionar (+)</option>
+                    <option value="subtract">Subtrair (-)</option>
+                    <option value="multiply">Multiplicar (*)</option>
+                    <option value="divide">Dividir (/)</option>
+                </select>
+            </div>
+            <div class="property-item">
+                <label class="property-label">Valor</label>
+                <input type="text" id="modal-manip-var-value" class="property-input">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Cancelar</button>
+            <button id="btn-confirm-manip-var" class="btn primary">Confirmar</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal); // <--- O modal é adicionado AQUI
+
+    // AGORA que o modal está no DOM, podemos adicionar os listeners aos seus elementos
+    const closeModal = () => {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.remove();
+        }
+    };
+
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
+    
+    // Adicione o listener diretamente ao elemento após ele ser criado e anexado ao DOM
+    const confirmBtn = document.getElementById('btn-confirm-manip-var');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', () => {
+            const varName = document.getElementById('modal-manip-var-name').value;
+            const operation = document.getElementById('modal-manip-var-op').value;
+            const value = document.getElementById('modal-manip-var-value').value;
+
+            if (varName) {
+                const actionValue = `${varName},${operation},${value}`;
+                if (callback) {
+                    callback(actionValue);
+                }
+            }
+            closeModal();
+        });
+    } else {
+        console.error("Botão de confirmação do modal de manipulação de variável não encontrado.");
+    }
+}
 
 // Selecionar evento para edição
 function selectEventForEditing(eventName, componentType, componentId) {
@@ -1552,6 +1634,12 @@ function updateActionParameters() {
                     <option value="enable">Habilitar</option>
                     <option value="disable">Desabilitar</option>
                 </select>
+            `;
+            break;
+        case 'manipulate_variable':
+            parametersHTML = `
+                <input type="hidden" id="action-value">
+                <button type="button" onclick="showManipulateVariableModal(value => document.getElementById('action-value').value = value)" style="width: 100%; padding: 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Abrir Editor de Variáveis</button>
             `;
             break;
         default:
@@ -2989,6 +3077,9 @@ function generateJavaScriptWithEvents() {
     const components = canvas.querySelectorAll('.designer-component');
     
     let js = '// Código JavaScript gerado pelo KreatorJS\n\n';
+
+    // Adicionar variáveis do projeto
+    js += `let projectVariables = ${JSON.stringify(projectVariables, null, 2)};\n\n`;
     
     // Adicionar funções utilitárias
     js += `// Funções utilitárias
@@ -3093,6 +3184,41 @@ function enableElement(id) {
     if (element) element.disabled = false;
 }
 
+function manipulateVariable(name, operation, value) {
+    if (projectVariables[name]) {
+        let currentValue = projectVariables[name].value;
+        let newValue = value;
+
+        // Se o valor for uma referência a outra variável, use o valor dela
+        if (typeof value === 'string' && value.startsWith('<') && value.endsWith('>')) {
+            const referencedVarName = value.substring(1, value.length - 1);
+            if (projectVariables[referencedVarName]) {
+                newValue = projectVariables[referencedVarName].value;
+            }
+        }
+
+        const numValue = parseFloat(newValue);
+
+        switch (operation) {
+            case 'set':
+                projectVariables[name].value = isNaN(numValue) ? newValue : numValue;
+                break;
+            case 'add':
+                projectVariables[name].value = parseFloat(currentValue) + numValue;
+                break;
+            case 'subtract':
+                projectVariables[name].value = parseFloat(currentValue) - numValue;
+                break;
+            case 'multiply':
+                projectVariables[name].value = parseFloat(currentValue) * numValue;
+                break;
+            case 'divide':
+                projectVariables[name].value = parseFloat(currentValue) / numValue;
+                break;
+        }
+    }
+}
+
 function showCustomConfirm(title, text) {
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-confirm-modal');
@@ -3194,34 +3320,49 @@ function generateActionCode(action) {
                   .replace(/\r/g, '\\r')
                   .replace(/\t/g, '\\t');
     }
+
+    function resolveValue(value) {
+        if (typeof value === 'string' && value.startsWith('<') && value.endsWith('>')) {
+            const varName = value.substring(1, value.length - 1);
+            return `projectVariables['${varName}'].value`;
+        }
+        return `'${escapeJavaScript(value || '')}'`;
+    }
     
-    const escapedValue = escapeJavaScript(action.value || '');
+    const resolvedValue = resolveValue(action.value || '');
     
     if (!action.targetId) {
         // Ação global
         switch (action.actionType) {
             case 'show_alert':
-                code = `    alert('${escapedValue}');\n`;
+                code = `    alert(${resolvedValue});\n`;
                 break;
             case 'console_log':
-                code = `    window.logToConsoleInPreview('${escapedValue}', 'info');\n`;
+                code = `    window.logToConsoleInPreview(${resolvedValue}, 'info');\n`;
                 break;
 
             case 'redirect_page':
-                code = `    window.location.href = '${escapedValue}';\n`;
+                code = `    window.location.href = ${resolvedValue};\n`;
+                break;
+            case 'manipulate_variable':
+                if (action.value && action.value.includes(',')) {
+                    const [varName, operation, value] = action.value.split(',');
+                    const resolvedManipulationValue = resolveValue(value);
+                    code = `    manipulateVariable('${varName}', '${operation}', ${resolvedManipulationValue});\n`;
+                }
                 break;
         }
     } else {
         // Ação em elemento específico
         switch (action.actionType) {
             case 'change_text':
-                code = `    changeText('${action.targetId}', '${escapedValue}');\n`;
+                code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
                 break;
             case 'change_value':
-                code = `    changeText('${action.targetId}', '${escapedValue}');\n`;
+                code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
                 break;
             case 'change_checkbox_text':
-                code = `    changeText('${action.targetId}', '${escapedValue}');\n`;
+                code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
                 break;
             case 'toggle_checkbox':
                 if (action.value === 'check') {
@@ -3796,8 +3937,9 @@ function initializeVariablesPanel() {
         <div id="variable-list" style="margin-bottom: 15px; height: calc(100% - 50px); overflow-y: auto;">
             <!-- As variáveis serão listadas aqui -->
         </div>
-        <div id="add-variable-container" style="padding-top: 10px; border-top: 1px solid #3e3e42;">
-            <button id="btn-show-add-var-modal" class="btn primary" style="width: 100%;">Adicionar Variável</button>
+        <div id="variable-actions" style="padding-top: 10px; border-top: 1px solid #3e3e42; display: flex; gap: 5px;">
+            <button id="btn-show-add-var-modal" class="btn primary" style="flex: 1;">Adicionar Variável</button>
+            <button id="btn-show-edit-vars-modal" class="btn" style="flex: 1;">Editar Variáveis</button>
         </div>
     `;
 
@@ -3998,3 +4140,267 @@ function closeAddVariableModal() {
         modal.remove();
     }
 }
+
+function showEditVariablesModal() {
+    const modalId = 'edit-variables-modal';
+    if (document.getElementById(modalId)) return;
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    
+    // Estilos mais específicos para garantir que o modal apareça
+    modal.style.cssText = `
+        display: flex !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        background-color: rgba(0, 0, 0, 0.7) !important;
+        justify-content: center !important;
+        align-items: center !important;
+        z-index: 1001 !important;
+        backdrop-filter: blur(2px) !important;
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.cssText = `
+        background-color: #252526 !important;
+        border: 1px solid #3e3e42 !important;
+        border-radius: 6px !important;
+        max-width: 600px !important;
+        width: 90% !important;
+        height: auto !important;
+        max-height: 80vh !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+    `;
+
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Editar Variáveis do Projeto</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="edit-variable-list" style="max-height: 400px; overflow-y: auto; border: 1px solid #3e3e42; border-radius: 4px; padding: 10px;">
+                ${generateEditVariableList()}
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Fechar</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    const closeModalHandler = () => {
+        closeEditVariablesModal();
+    };
+
+    modal.querySelector(".close-btn").addEventListener("click", closeModalHandler);
+    modal.querySelector(".btn-cancel").addEventListener("click", closeModalHandler);
+
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) {
+            closeModalHandler();
+        }
+    });
+}
+
+function closeEditVariablesModal() {
+    const modal = document.getElementById('edit-variables-modal');
+    if (modal) {
+        modal.remove();
+    }
+    renderVariableList(); // Atualiza a lista de variáveis no painel principal
+}
+
+function generateEditVariableList() {
+    let html = '';
+    if (Object.keys(projectVariables).length === 0) {
+        html = '<p style="color: #9d9d9d; font-size: 12px; text-align: center; padding: 20px;">Nenhuma variável definida.</p>';
+    } else {
+        for (const name in projectVariables) {
+            const variable = projectVariables[name];
+            let displayValue = JSON.stringify(variable.value);
+            if (displayValue.length > 30) {
+                displayValue = displayValue.substring(0, 30) + '...';
+            }
+            html += `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #3e3e42;">
+                    <div>
+                        <strong style="color: #9cdcfe;">${name}</strong>
+                        <span style="color: #ce9178;">(${variable.type})</span>
+                        <span style="color: #b5cea8;">= ${displayValue}</span>
+                    </div>
+                    <div>
+                        <button onclick="editVariable('${name}')" style="background: #007acc; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; margin-right: 5px;">✏️</button>
+                        <button onclick="removeVariable('${name}')" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer;">🗑️</button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    return html;
+}
+
+function refreshEditVariableList() {
+    const list = document.getElementById('edit-variable-list');
+    if (list) {
+        list.innerHTML = generateEditVariableList();
+    }
+}
+
+function editVariable(name) {
+    const variable = projectVariables[name];
+    if (!variable) return;
+
+    const modalId = 'edit-single-variable-modal';
+    if (document.getElementById(modalId)) return;
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    
+    // Estilos mais específicos para garantir que o modal apareça
+    modal.style.cssText = `
+        display: flex !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        background-color: rgba(0, 0, 0, 0.7) !important;
+        justify-content: center !important;
+        align-items: center !important;
+        z-index: 1002 !important;
+        backdrop-filter: blur(2px) !important;
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.cssText = `
+        background-color: #252526 !important;
+        border: 1px solid #3e3e42 !important;
+        border-radius: 6px !important;
+        max-width: 400px !important;
+        width: 90% !important;
+        height: auto !important;
+        max-height: 80vh !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
+    `;
+
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Editar Variável: ${name}</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="property-item">
+                <label class="property-label">Nome da Variável</label>
+                <input type="text" id="modal-edit-var-name" class="property-input" value="${name}" readonly>
+            </div>
+            <div class="property-item">
+                <label class="property-label">Valor</label>
+                <input type="text" id="modal-edit-var-value" class="property-input" value="${JSON.stringify(variable.value).replace(/"/g, '&quot;')}">
+            </div>
+            <div class="property-item">
+                <label class="property-label">Tipo</label>
+                <select id="modal-edit-var-type" class="property-input">
+                    <option value="string" ${variable.type === 'string' ? 'selected' : ''}>Texto (String)</option>
+                    <option value="number" ${variable.type === 'number' ? 'selected' : ''}>Número (Number)</option>
+                    <option value="boolean" ${variable.type === 'boolean' ? 'selected' : ''}>Booleano (Boolean)</option>
+                    <option value="object" ${variable.type === 'object' ? 'selected' : ''}>Objeto (Object)</option>
+                    <option value="array" ${variable.type === 'array' ? 'selected' : ''}>Array</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Cancelar</button>
+            <button id="btn-confirm-edit-var" class="btn primary">Salvar</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    const closeModalHandler = () => {
+        closeEditSingleVariableModal();
+    };
+
+    modal.querySelector(".close-btn").addEventListener("click", closeModalHandler);
+    modal.querySelector(".btn-cancel").addEventListener("click", closeModalHandler);
+    modal.querySelector("#btn-confirm-edit-var").addEventListener("click", () => {
+        const newValue = document.getElementById('modal-edit-var-value').value;
+        const newType = document.getElementById('modal-edit-var-type').value;
+        
+        let parsedValue;
+        try {
+            switch (newType) {
+                case 'string':
+                    parsedValue = String(newValue);
+                    break;
+                case 'number':
+                    parsedValue = Number(newValue);
+                    if (isNaN(parsedValue)) throw new Error('Valor inválido para número');
+                    break;
+                case 'boolean':
+                    parsedValue = newValue.toLowerCase() === 'true' || newValue === '1';
+                    break;
+                case 'object':
+                    parsedValue = JSON.parse(newValue || '{}');
+                    break;
+                case 'array':
+                    parsedValue = JSON.parse(newValue || '[]');
+                    if (!Array.isArray(parsedValue)) throw new Error('Valor inválido para array');
+                    break;
+            }
+        } catch (e) {
+            logToConsole(`Erro ao processar valor da variável: ${e.message}`, 'error');
+            return;
+        }
+
+        projectVariables[name] = { type: newType, value: parsedValue };
+        logToConsole(`Variável "${name}" atualizada com sucesso.`, 'success');
+        refreshEditVariableList();
+        closeEditSingleVariableModal();
+    });
+
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) {
+            closeModalHandler();
+        }
+    });
+}
+
+function closeEditSingleVariableModal() {
+    const modal = document.getElementById('edit-single-variable-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Atualizar setupVariableButtonListener para incluir o novo botão
+function setupVariableButtonListener() {
+    const addButton = document.getElementById('btn-show-add-var-modal');
+    const editButton = document.getElementById('btn-show-edit-vars-modal');
+
+    if (addButton) {
+        addButton.removeEventListener('click', showAddVariableModal);
+        addButton.addEventListener('click', showAddVariableModal);
+    }
+    if (editButton) {
+        editButton.removeEventListener('click', showEditVariablesModal);
+        editButton.addEventListener('click', showEditVariablesModal);
+    }
+}
+
+
