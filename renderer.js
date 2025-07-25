@@ -994,13 +994,15 @@ function updateComponentProperty(property, value) {
 function populateGlobalInspector() {
     const inspector = document.getElementById("object-inspector");
     const canvas = document.getElementById('designer-canvas');
+    //const currentBgColor = rgbToHex(window.getComputedStyle(canvas).backgroundColor) || globalProjectSettings.backgroundColor;
+    const currentBgColor = rgbToHex("rgb(255,255,255)")
 
     inspector.innerHTML = `
         <div class="property-group">
             <div class="property-group-title">Configurações Globais</div>
             <div class="property-item">
                 <label class="property-label">Cor de Fundo</label>
-                <input type="color" class="property-input" id="global-bg-color" value="${globalProjectSettings.backgroundColor}">
+                <input type="color" class="property-input" id="global-bg-color" value="${currentBgColor}">
             </div>
         </div>
         <div class="property-group">
@@ -2238,6 +2240,7 @@ function runProject() {
     // Gerar e executar o projeto
     const htmlCode = generateHTML();
     const jsCode = generateJavaScript();
+    const bgColor = globalProjectSettings.backgroundColor;
     
     // Criar janela de preview
     const previewWindow = window.open('', '_blank', 'width=800,height=600');
@@ -2247,7 +2250,11 @@ function runProject() {
         <head>
             <title>Preview - KreatorJS</title>
             <style>
-                body { margin: 20px; font-family: Arial, sans-serif; }
+                body { 
+                    margin: 20px; 
+                    font-family: Arial, sans-serif; 
+                    background-color: ${bgColor};
+                }
             </style>
         </head>
         <body>
@@ -2875,6 +2882,7 @@ function generateCompleteHTML() {
     const htmlContent = generateHTML();
     const jsCode = generateJavaScript();
     const cssCode = generateCSS();
+    const bgColor = globalProjectSettings.backgroundColor;
     
     return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -2883,6 +2891,9 @@ function generateCompleteHTML() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${currentProject?.data?.name || 'Projeto KreatorJS'}</title>
     <style>
+        body {
+            background-color: ${bgColor};
+        }
         ${cssCode}
     </style>
 </head>
