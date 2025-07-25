@@ -592,6 +592,11 @@ function populateObjectInspector(component) {
     
     inspector.innerHTML = `
         <div class="property-group">
+            <div class="property-group-title">Eventos</div>
+            <button class="btn" onclick="showEventEditorModal(selectedComponent, selectedComponent.dataset.componentId, selectedComponent.dataset.componentType)">Editar Eventos</button>
+            <div class="event-count">${eventCount} evento(s) configurado(s)</div>
+        </div>
+        <div class="property-group">
             <div class="property-group-title">Geral</div>
             <div class="property-item">
                 <label class="property-label">ID</label>
@@ -621,18 +626,12 @@ function populateObjectInspector(component) {
         </div>
         
         <div class="property-group">
-            <div class="property-group-title collapsible" id="style-header" onclick="toggleStyleSection()">
-                Estilo <span id="style-arrow">▼</span>
+            <div class="property-group-title collapsible" id="style-header" onclick="toggleStyleSection()" style='color:rgba(151, 193, 244, 1); font-weight:700;'>
+                Estilo <span id="style-arrow">▶</span>
             </div>
-            <div class="property-section" id="style-section">
+            <div class="property-section" id="style-section" style="display: none;">
                 ${generateStylePropertyInputs(componentDef, component)}
             </div>
-        </div>
-        
-        <div class="property-group">
-            <div class="property-group-title">Eventos</div>
-            <button class="btn" onclick="showEventEditorModal(selectedComponent, selectedComponent.dataset.componentId, selectedComponent.dataset.componentType)">Editar Eventos</button>
-            <div class="event-count">${eventCount} evento(s) configurado(s)</div>
         </div>
     `;
     
