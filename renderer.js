@@ -2065,13 +2065,10 @@ async function createProjectFromTemplate(templateId) {
     }
     
     // Limpar tudo
-    clearAll(false);
+    await clearAll(false);
 
-    // Resetar estado
-    currentProject = null;
-    componentCounter = 0;
-    undoStack = [];
-    redoStack = [];
+    // O estado já foi resetado pelo clearAll.
+    // Agora, apenas carregamos os componentes do template.
     
     // Carregar componentes do template
     if (template.components.length > 0) {
@@ -2429,8 +2426,34 @@ async function clearDesigner(confirm = true) {
 async function clearAll(confirm = true) {
     const doClear = confirm ? await window.showCustomConfirm('Limpar Tudo', 'Limpar todo o projeto? Isso removerá todos os componentes e variáveis.') : true;
     if (doClear) {
-        // Forçar um re-render completo da aplicação
-        location.reload();
+        // Limpar canvas
+        const canvas = document.getElementById('designer-canvas');
+        const components = canvas.querySelectorAll('.designer-component');
+        components.forEach(component => component.remove());
+        const placeholder = canvas.querySelector('.canvas-placeholder');
+        if (placeholder) {
+            placeholder.style.display = 'block';
+        }
+        selectComponent(null);
+
+        // Resetar estado do projeto
+        currentProject = null;
+        componentCounter = 0;
+        undoStack = [];
+        redoStack = [];
+        projectVariables = {};
+        componentEvents = {};
+        globalEvents = {};
+        globalProjectSettings = { backgroundColor: '#ffffff' };
+        canvas.style.backgroundColor = globalProjectSettings.backgroundColor;
+
+        // Atualizar UIs
+        renderVariableList();
+        populateGlobalInspector();
+        logToConsole('Projeto limpo e estado reiniciado.', 'success');
+
+        // Salvar o estado limpo para o histórico de undo
+        saveState();
     }
 }
 
