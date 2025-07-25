@@ -540,6 +540,19 @@ function preventDesignModeInteraction(wrapper) {
     }
 }
 
+function rgbToHex(rgb) {
+    if (!rgb || !rgb.includes('rgb')) return rgb; // Retorna o valor original se não for um RGB válido
+
+    const result = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb);
+    if (!result) return rgb;
+
+    const r = parseInt(result[1], 10);
+    const g = parseInt(result[2], 10);
+    const b = parseInt(result[3], 10);
+
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+}
+
 // Verificar se estamos no modo execução
 function isInExecutionMode() {
     // Por enquanto, sempre retorna false (sempre em modo design)
@@ -690,24 +703,24 @@ function generateStylePropertyInputs(componentDef, component) {
             <div class="property-item">
                 <label class="property-label">Estilo da Borda</label>
                 <select class="property-input" data-property="borderStyle">
-                    <option value="none" ${element.style.borderStyle === 'none' ? 'selected' : ''}>Nenhuma</option>
-                    <option value="solid" ${element.style.borderStyle === 'solid' ? 'selected' : ''}>Sólida</option>
-                    <option value="dashed" ${element.style.borderStyle === 'dashed' ? 'selected' : ''}>Tracejada</option>
-                    <option value="dotted" ${element.style.borderStyle === 'dotted' ? 'selected' : ''}>Pontilhada</option>
-                    <option value="double" ${element.style.borderStyle === 'double' ? 'selected' : ''}>Dupla</option>
+                    <option value="none" ${getPropertyValue(element, 'borderStyle') === 'none' ? 'selected' : ''}>Nenhuma</option>
+                    <option value="solid" ${getPropertyValue(element, 'borderStyle') === 'solid' ? 'selected' : ''}>Sólida</option>
+                    <option value="dashed" ${getPropertyValue(element, 'borderStyle') === 'dashed' ? 'selected' : ''}>Tracejada</option>
+                    <option value="dotted" ${getPropertyValue(element, 'borderStyle') === 'dotted' ? 'selected' : ''}>Pontilhada</option>
+                    <option value="double" ${getPropertyValue(element, 'borderStyle') === 'double' ? 'selected' : ''}>Dupla</option>
                 </select>
             </div>
             <div class="property-item">
                 <label class="property-label">Largura da Borda</label>
-                <input type="text" class="property-input" data-property="borderWidth" value="${element.style.borderWidth || '1px'}" placeholder="1px">
+                <input type="text" class="property-input" data-property="borderWidth" value="${getPropertyValue(element, 'borderWidth') || '1px'}" placeholder="1px">
             </div>
             <div class="property-item">
                 <label class="property-label">Cor da Borda</label>
-                <input type="color" class="property-input" data-property="borderColor" value="${element.style.borderColor || '#000000'}">
+                <input type="color" class="property-input" data-property="borderColor" value="${getPropertyValue(element, 'borderColor') || '#000000'}">
             </div>
             <div class="property-item">
                 <label class="property-label">Raio da Borda</label>
-                <input type="text" class="property-input" data-property="borderRadius" value="${element.style.borderRadius || '0px'}" placeholder="0px">
+                <input type="text" class="property-input" data-property="borderRadius" value="${getPropertyValue(element, 'borderRadius') || '0px'}" placeholder="0px">
             </div>
         </div>
     `;
@@ -718,18 +731,16 @@ function generateStylePropertyInputs(componentDef, component) {
             <div class="property-subsection-title">Cores e Texto</div>
     `;
     
-    Object.keys(componentDef.defaultProps).forEach(key => {
-        if (styleProps.includes(key)) {
-            const value = getPropertyValue(element, key);
-            const inputType = getInputType(key);
-            
-            html += `
-                <div class="property-item">
-                    <label class="property-label">${formatPropertyName(key)}</label>
-                    <input type="${inputType}" class="property-input" data-property="${key}" value="${value}">
-                </div>
-            `;
-        }
+    styleProps.forEach(key => {
+        const value = getPropertyValue(element, key);
+        const inputType = getInputType(key);
+        
+        html += `
+            <div class="property-item">
+                <label class="property-label">${formatPropertyName(key)}</label>
+                <input type="${inputType}" class="property-input" data-property="${key}" value="${value}">
+            </div>
+        `;
     });
     
     html += `</div>`;
@@ -747,12 +758,12 @@ function generateStylePropertyInputs(componentDef, component) {
     
     // Propriedades extras de estilo
     const extraProperties = [
-        { key: 'boxShadow', label: 'Sombra', type: 'text', value: element.style.boxShadow || 'none' },
-        { key: 'opacity', label: 'Opacidade', type: 'range', value: element.style.opacity || '1', min: '0', max: '1', step: '0.1' },
-        { key: 'transform', label: 'Transformação', type: 'text', value: element.style.transform || 'none' },
-        { key: 'cursor', label: 'Cursor', type: 'select', value: element.style.cursor || 'default', options: ['default', 'pointer', 'text', 'move', 'not-allowed', 'grab', 'grabbing'] },
-        { key: 'overflow', label: 'Overflow', type: 'select', value: element.style.overflow || 'visible', options: ['visible', 'hidden', 'scroll', 'auto'] },
-        { key: 'textAlign', label: 'Alinhamento do Texto', type: 'select', value: element.style.textAlign || 'left', options: ['left', 'center', 'right', 'justify'] }
+        { key: 'boxShadow', label: 'Sombra', type: 'text', value: getPropertyValue(element, 'boxShadow') || 'none' },
+        { key: 'opacity', label: 'Opacidade', type: 'range', value: getPropertyValue(element, 'opacity') || '1', min: '0', max: '1', step: '0.1' },
+        { key: 'transform', label: 'Transformação', type: 'text', value: getPropertyValue(element, 'transform') || 'none' },
+        { key: 'cursor', label: 'Cursor', type: 'select', value: getPropertyValue(element, 'cursor') || 'default', options: ['default', 'pointer', 'text', 'move', 'not-allowed', 'grab', 'grabbing'] },
+        { key: 'overflow', label: 'Overflow', type: 'select', value: getPropertyValue(element, 'overflow') || 'visible', options: ['visible', 'hidden', 'scroll', 'auto'] },
+        { key: 'textAlign', label: 'Alinhamento do Texto', type: 'select', value: getPropertyValue(element, 'textAlign') || 'left', options: ['left', 'center', 'right', 'justify'] }
     ];
     
     html += `
@@ -812,6 +823,16 @@ function toggleStyleSection() {
 
 // Obter valor da propriedade
 function getPropertyValue(element, property) {
+    // Primeiro, verificar o estilo computado para obter o valor real
+    const computedStyle = window.getComputedStyle(element);
+    let value = computedStyle[property];
+
+    // Fallback para propriedades de estilo direto, se necessário
+    if (!value) {
+        value = element.style[property];
+    }
+
+    // Lógica específica para cada propriedade
     switch (property) {
         case 'text':
             return element.textContent || element.value || '';
@@ -823,8 +844,12 @@ function getPropertyValue(element, property) {
             return element.alt || '';
         case 'checked':
             return element.checked || false;
+        case 'backgroundColor':
+        case 'color':
+        case 'borderColor':
+            return rgbToHex(value);
         default:
-            return element.style[property] || '';
+            return value || '';
     }
 }
 
