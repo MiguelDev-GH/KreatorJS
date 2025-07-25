@@ -20,6 +20,10 @@ let componentCounter = 0;
 let undoStack = [];
 let redoStack = [];
 let projectVariables = {};
+let globalProjectSettings = {
+    backgroundColor: '#ffffff'
+};
+let globalEvents = {};
 
 // Componentes disponíveis na paleta
 const componentLibrary = [
@@ -209,6 +213,7 @@ function initializeIDE() {
     
     // Estado inicial
     updateUI();
+    populateGlobalInspector();
 }
 
 // Configurar listeners de eventos
@@ -555,7 +560,7 @@ function selectComponent(component) {
         component.classList.add('selected');
         populateObjectInspector(component);
     } else {
-        clearObjectInspector();
+        populateGlobalInspector();
     }
 }
 
@@ -960,14 +965,36 @@ function updateComponentProperty(property, value) {
     saveState();
 }
 
-// Limpar inspetor de objetos
-function clearObjectInspector() {
-    const inspector = document.getElementById('object-inspector');
+// Popular o inspetor com configurações globais
+function populateGlobalInspector() {
+    const inspector = document.getElementById("object-inspector");
+    const canvas = document.getElementById('designer-canvas');
+
     inspector.innerHTML = `
-        <div class="inspector-placeholder">
-            <p>Selecione um componente para editar suas propriedades</p>
+        <div class="property-group">
+            <div class="property-group-title">Configurações Globais</div>
+            <div class="property-item">
+                <label class="property-label">Cor de Fundo</label>
+                <input type="color" class="property-input" id="global-bg-color" value="${globalProjectSettings.backgroundColor}">
+            </div>
+        </div>
+        <div class="property-group">
+            <div class="property-group-title">Eventos Globais</div>
+            <button class="btn" onclick="showEventEditorModal(null, 'global', 'global')">Editar Eventos Globais</button>
         </div>
     `;
+
+    // Listener para a cor de fundo
+    const bgColorInput = document.getElementById('global-bg-color');
+    if (bgColorInput) {
+        bgColorInput.addEventListener('input', (e) => {
+            globalProjectSettings.backgroundColor = e.target.value;
+            if (canvas) {
+                canvas.style.backgroundColor = e.target.value;
+            }
+            saveState();
+        });
+    }
 }
 
 // Sistema de eventos
@@ -1013,6 +1040,10 @@ const eventSystem = {
             { name: 'click', label: 'Clicado', description: 'Quando a imagem for clicada' },
             { name: 'load', label: 'Carregada', description: 'Quando a imagem for carregada' },
             { name: 'error', label: 'Erro ao carregar', description: 'Quando houver erro ao carregar' }
+        ],
+        global: [
+            { name: 'load', label: 'Ao Carregar a Página', description: 'Quando a página termina de carregar' },
+            { name: 'unload', label: 'Ao Fechar a Página', description: 'Quando o usuário fecha a página' }
         ]
     },
     
@@ -1083,6 +1114,7 @@ function editComponentEvent(component) {
 
 // Mostrar modal do editor de eventos
 function showEventEditorModal(component, componentId, componentType) {
+    const isGlobal = componentType === 'global';
     // Criar modal
     const modal = document.createElement('div');
     modal.id = 'event-editor-modal';
@@ -1116,12 +1148,12 @@ function showEventEditorModal(component, componentId, componentType) {
     const availableEvents = eventSystem.availableEvents[componentType] || [];
     
     // Obter eventos já configurados
-    const currentEvents = getCurrentComponentEvents(componentId);
+    const currentEvents = isGlobal ? globalEvents : getCurrentComponentEvents(componentId);
     
     modalContent.innerHTML = `
         <div style="padding: 20px; border-bottom: 1px solid #ddd; background: #f8f9fa;">
-            <h2 style="margin: 0; color: #333;">Editor de Eventos - ${componentId}</h2>
-            <p style="margin: 5px 0 0 0; color: #666;">Configure os eventos e ações para este componente</p>
+            <h2 style="margin: 0; color: #333;">Editor de Eventos - ${isGlobal ? 'Eventos Globais' : componentId}</h2>
+            <p style="margin: 5px 0 0 0; color: #666;">Configure os eventos e ações para ${isGlobal ? 'o projeto' : 'este componente'}</p>
         </div>
         
         <div style="flex: 1; display: flex; overflow: hidden;">
@@ -1209,7 +1241,13 @@ function showEventEditorModal(component, componentId, componentType) {
     });
     
     document.getElementById('cancel-events').addEventListener('click', closeEventEditorModal);
-    document.getElementById('save-events').addEventListener('click', () => saveComponentEvents(componentId));
+    document.getElementById('save-events').addEventListener('click', () => {
+        if (isGlobal) {
+            saveGlobalEvents();
+        } else {
+            saveComponentEvents(componentId);
+        }
+    });
     
     // Event listeners para eventos
     document.querySelectorAll('.event-item').forEach(item => {
@@ -1318,9 +1356,14 @@ function showManipulateVariableModal(callback) {
 
 // Selecionar evento para edição
 function selectEventForEditing(eventName, componentType, componentId) {
+    const isGlobal = componentType === 'global';
     // Salvar evento anterior se existir
     if (currentEditingEvent && currentEditingEvent !== eventName) {
-        saveCurrentEventActions(componentId, currentEditingEvent);
+        if (isGlobal) {
+            saveCurrentGlobalEventActions(currentEditingEvent);
+        } else {
+            saveCurrentEventActions(componentId, currentEditingEvent);
+        }
     }
     
     // Definir evento atual
@@ -1345,9 +1388,10 @@ function selectEventForEditing(eventName, componentType, componentId) {
 // Carregar editor de ações
 function loadActionsEditor(eventName, componentType, componentId) {
     const actionsEditor = document.getElementById('actions-editor');
+    const isGlobal = componentType === 'global';
     
     // Obter ações já configuradas para este evento
-    const currentActions = getCurrentEventActions(componentId, eventName);
+    const currentActions = isGlobal ? (globalEvents[eventName] || []) : getCurrentEventActions(componentId, eventName);
     
     actionsEditor.innerHTML = `
         <div style="margin-bottom: 20px;">
@@ -2342,6 +2386,7 @@ async function clearDesigner(confirm = true) {
         }
         
         selectComponent(null);
+        populateGlobalInspector();
         saveState();
         logToConsole('Designer limpo', 'success');
         document.body.focus()
@@ -3100,6 +3145,24 @@ function saveComponentEvents(componentId) {
     }
 }
 
+// Salvar eventos globais
+function saveGlobalEvents() {
+    const modal = document.getElementById('event-editor-modal');
+    if (!modal) return;
+
+    // Salvar o evento global atualmente sendo editado
+    if (currentEditingEvent) {
+        saveCurrentGlobalEventActions(currentEditingEvent);
+    }
+
+    // Fechar modal
+    closeEventEditorModal();
+
+    // Log
+    const eventCount = Object.keys(globalEvents).length;
+    logToConsole(`Eventos globais salvos: ${eventCount} evento(s) configurado(s)`, 'success');
+}
+
 // Salvar ações do evento atual
 function saveCurrentEventActions(componentId, eventName) {
     const actionsEditor = document.getElementById('actions-editor');
@@ -3126,6 +3189,30 @@ function saveCurrentEventActions(componentId, eventName) {
         componentEvents[componentId][eventName] = actions;
     } else {
         delete componentEvents[componentId][eventName];
+    }
+}
+
+// Salvar ações do evento global atual
+function saveCurrentGlobalEventActions(eventName) {
+    const actionsEditor = document.getElementById('actions-editor');
+    const actionItems = actionsEditor.querySelectorAll('.action-item');
+    const actions = [];
+
+    actionItems.forEach(actionItem => {
+        const actionData = {
+            targetId: actionItem.dataset.targetId === 'global' ? null : actionItem.dataset.targetId,
+            actionType: actionItem.dataset.actionType,
+            actionName: actionItem.querySelector('div:first-child').textContent,
+            value: actionItem.dataset.actionValue
+        };
+        actions.push(actionData);
+    });
+
+    // Salvar ou remover evento global baseado nas ações
+    if (actions.length > 0) {
+        globalEvents[eventName] = actions;
+    } else {
+        delete globalEvents[eventName];
     }
 }
 
@@ -3325,6 +3412,22 @@ function logToConsoleInPreview(message, type = 'info') {
 // Eventos dos componentes
 `;
     
+    // Funções de Eventos Globais
+    Object.keys(globalEvents).forEach(eventName => {
+        const actions = globalEvents[eventName];
+        js += `
+// Evento Global: ${eventName}
+function global_${eventName}(event) {
+    console.log('Evento global ${eventName} disparado');
+`;
+        actions.forEach(action => {
+            js += generateActionCode(action);
+        });
+        js += `}
+
+`;
+    });
+
     components.forEach(component => {
         const componentId = component.dataset.componentId;
         const events = componentEvents[componentId] || {};
@@ -3354,7 +3457,8 @@ function ${componentId}_${eventName}(event) {
 // Inicialização dos eventos
 document.addEventListener('DOMContentLoaded', function() {
 `;
-    
+
+    // Eventos de Componentes
     components.forEach(component => {
         const componentId = component.dataset.componentId;
         const events = componentEvents[componentId] || {};
@@ -3366,6 +3470,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 `;
         });
+    });
+
+    // Eventos Globais
+    Object.keys(globalEvents).forEach(eventName => {
+        js += `    window.addEventListener('${eventName}', global_${eventName});\n`;
     });
     
     js += '});';
