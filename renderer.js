@@ -161,6 +161,42 @@ document.addEventListener('DOMContentLoaded', () => {
     logToConsole('KreatorJS inicializado com sucesso!', 'success');
 });
 
+function showCustomConfirm(title, text) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-confirm-modal');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const textEl = document.getElementById('confirm-modal-text');
+        const okBtn = document.getElementById('confirm-modal-ok');
+        const cancelBtn = document.getElementById('confirm-modal-cancel');
+        const closeBtn = document.getElementById('confirm-modal-close');
+
+        titleEl.textContent = title;
+        textEl.textContent = text;
+
+        modal.style.display = 'block';
+
+        const close = (value) => {
+            modal.style.display = 'none';
+            resolve(value);
+        };
+
+        okBtn.onclick = () => close(true);
+        cancelBtn.onclick = () => close(false);
+        closeBtn.onclick = () => close(false);
+    });
+}
+
+function logToConsoleInPreview(message, type = 'info') {
+    if (window.opener) {
+        window.opener.postMessage({
+            type: 'kreatorjs-log',
+            message: message,
+            logType: type
+        }, '*');
+    }
+    console.log(`[Preview] ${message}`);
+}
+
 // Inicializar a IDE
 function initializeIDE() {
     // Configurar área de design
@@ -1195,32 +1231,6 @@ function closeEventEditorModal() {
     }
 }
 
-// Função de confirmação personalizada
-function showCustomConfirm(title, text) {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('custom-confirm-modal');
-        const titleEl = document.getElementById('confirm-modal-title');
-        const textEl = document.getElementById('confirm-modal-text');
-        const okBtn = document.getElementById('confirm-modal-ok');
-        const cancelBtn = document.getElementById('confirm-modal-cancel');
-        const closeBtn = document.getElementById('confirm-modal-close');
-
-        titleEl.textContent = title;
-        textEl.textContent = text;
-
-        modal.style.display = 'block';
-
-        const close = (value) => {
-            modal.style.display = 'none';
-            resolve(value);
-        };
-
-        okBtn.onclick = () => close(true);
-        cancelBtn.onclick = () => close(false);
-        closeBtn.onclick = () => close(false);
-    });
-}
-
 
 
 // Selecionar evento para edição
@@ -2060,6 +2070,16 @@ function runProject() {
         </html>
     `);
     previewWindow.document.close();
+
+    // Adicionar um listener para mensagens da janela de preview
+    window.addEventListener('message', (event) => {
+        if (event.source === previewWindow) {
+            const { type, message, logType } = event.data;
+            if (type === 'kreatorjs-log') {
+                logToConsole(message, logType);
+            }
+        }
+    });
     
     logToConsole('Projeto executado em nova janela', 'success');
 }
@@ -2193,7 +2213,7 @@ function toggleGrid() {
 }
 
 async function clearDesigner(confirm = true) {
-    const doClear = confirm ? await showCustomConfirm('Limpar Designer', 'Todos os componentes serão removidos. Deseja continuar?') : true;
+    const doClear = confirm ? await window.showCustomConfirm('Limpar Designer', 'Todos os componentes serão removidos. Deseja continuar?') : true;
     if (doClear) {
         const canvas = document.getElementById('designer-canvas');
         const components = canvas.querySelectorAll('.designer-component');
@@ -2213,7 +2233,7 @@ async function clearDesigner(confirm = true) {
 }
 
 async function clearAll(confirm = true) {
-    const doClear = confirm ? await showCustomConfirm('Limpar Tudo', 'Limpar todo o projeto? Isso removerá todos os componentes e variáveis.') : true;
+    const doClear = confirm ? await window.showCustomConfirm('Limpar Tudo', 'Limpar todo o projeto? Isso removerá todos os componentes e variáveis.') : true;
     if (doClear) {
         // Forçar um re-render completo da aplicação
         location.reload();
@@ -3073,9 +3093,41 @@ function enableElement(id) {
     if (element) element.disabled = false;
 }
 
-// Função para log no console (compatível com KreatorJS)
-function logToConsole(message, type) {
-    console.log('[App] ' + message);
+function showCustomConfirm(title, text) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-confirm-modal');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const textEl = document.getElementById('confirm-modal-text');
+        const okBtn = document.getElementById('confirm-modal-ok');
+        const cancelBtn = document.getElementById('confirm-modal-cancel');
+        const closeBtn = document.getElementById('confirm-modal-close');
+
+        titleEl.textContent = title;
+        textEl.textContent = text;
+
+        modal.style.display = 'block';
+
+        const close = (value) => {
+            modal.style.display = 'none';
+            resolve(value);
+        };
+
+        okBtn.onclick = () => close(true);
+        cancelBtn.onclick = () => close(false);
+        closeBtn.onclick = () => close(false);
+    });
+}
+
+function logToConsoleInPreview(message, type = 'info') {
+    if (window.opener) {
+        window.opener.postMessage({
+            type: 'kreatorjs-log',
+            message: message,
+            logType: type
+        }, '*');
+    }
+    // Fallback para o console do navegador
+    console.log('[Preview] ' + message);
 }
 
 // Eventos dos componentes
@@ -3152,7 +3204,7 @@ function generateActionCode(action) {
                 code = `    alert('${escapedValue}');\n`;
                 break;
             case 'console_log':
-                code = `    logToConsole('${escapedValue}', 'info');\n`;
+                code = `    window.logToConsoleInPreview('${escapedValue}', 'info');\n`;
                 break;
 
             case 'redirect_page':
