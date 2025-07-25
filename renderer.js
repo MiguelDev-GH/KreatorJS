@@ -2027,12 +2027,13 @@ function closeTemplateModal() {
 }
 
 // Criar projeto a partir de template
-function createProjectFromTemplate(templateId) {
+async function createProjectFromTemplate(templateId) {
     const template = projectTemplates.find(t => t.id === templateId);
     if (!template) return;
     
     if (currentProject || document.querySelectorAll('.designer-component').length > 0 || Object.keys(projectVariables).length > 0) {
-        if (!confirm('Criar novo projeto? Todas as alterações não salvas serão perdidas.')) {
+        const confirmed = await showCustomConfirm('Criar Novo Projeto', 'Todas as alterações não salvas serão perdidas. Deseja continuar?');
+        if (!confirmed) {
             return;
         }
     }
