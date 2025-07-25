@@ -540,6 +540,19 @@ function preventDesignModeInteraction(wrapper) {
     }
 }
 
+function rgbToHex(rgb) {
+    if (!rgb || !rgb.includes('rgb')) return rgb; // Retorna o valor original se não for um RGB válido
+
+    const result = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(rgb);
+    if (!result) return rgb;
+
+    const r = parseInt(result[1], 10);
+    const g = parseInt(result[2], 10);
+    const b = parseInt(result[3], 10);
+
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+}
+
 // Verificar se estamos no modo execução
 function isInExecutionMode() {
     // Por enquanto, sempre retorna false (sempre em modo design)
@@ -703,7 +716,7 @@ function generateStylePropertyInputs(componentDef, component) {
             </div>
             <div class="property-item">
                 <label class="property-label">Cor da Borda</label>
-                <input type="color" class="property-input" data-property="borderColor" value="${element.style.borderColor || '#000000'}">
+                <input type="color" class="property-input" data-property="borderColor" value="${rgbToHex(element.style.borderColor) || '#000000'}">
             </div>
             <div class="property-item">
                 <label class="property-label">Raio da Borda</label>
@@ -812,6 +825,16 @@ function toggleStyleSection() {
 
 // Obter valor da propriedade
 function getPropertyValue(element, property) {
+    // Primeiro, verificar o estilo computado para obter o valor real
+    const computedStyle = window.getComputedStyle(element);
+    let value = computedStyle[property];
+
+    // Fallback para propriedades de estilo direto, se necessário
+    if (!value) {
+        value = element.style[property];
+    }
+
+    // Lógica específica para cada propriedade
     switch (property) {
         case 'text':
             return element.textContent || element.value || '';
@@ -823,8 +846,13 @@ function getPropertyValue(element, property) {
             return element.alt || '';
         case 'checked':
             return element.checked || false;
+        case 'backgroundColor':
+            // Se a cor for 'rgba(0, 0, 0, 0)', considerar transparente
+            return value === 'rgba(0, 0, 0, 0)' ? '#ffffff' : rgbToHex(value);
+        case 'color':
+            return rgbToHex(value);
         default:
-            return element.style[property] || '';
+            return value || '';
     }
 }
 
