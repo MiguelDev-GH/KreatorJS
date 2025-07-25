@@ -173,6 +173,7 @@ function showCustomConfirm(title, text) {
         titleEl.textContent = title;
         textEl.textContent = text;
 
+        modal.style.zIndex = "999999999"
         modal.style.display = 'block';
 
         const close = (value) => {
@@ -1413,36 +1414,78 @@ function renderActionItem(action, index) {
                     Alvo: ${action.targetId || 'Global'} | Valor: ${action.value || 'N/A'}
                 </div>
             </div>
-            <button class="remove-action" data-index="${index}" style="
-                background: #f44336;
-                color: white;
-                border: none;
-                padding: 4px 8px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 12px;
-            ">Remover</button>
+            <div>
+                <button class="edit-action" data-index="${index}" style="
+                    background: #2196f3;
+                    color: white;
+                    border: none;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    margin-right: 5px;
+                ">Editar</button>
+                <button class="remove-action" data-index="${index}" style="
+                    background: #f44336;
+                    color: white;
+                    border: none;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 12px;
+                ">Remover</button>
+            </div>
         </div>
     `;
 }
 
 // Mostrar seletor de ação
-function showActionSelector() {
-    document.getElementById('action-selector').style.display = 'block';
+function showActionSelector(actionToEdit = null) {
+    const actionSelector = document.getElementById('action-selector');
+    actionSelector.style.display = 'block';
+
+    const confirmButton = document.getElementById('confirm-action');
+    const title = actionSelector.querySelector('h4');
+
+    if (actionToEdit) {
+        title.textContent = 'Editar Ação';
+        confirmButton.textContent = 'Salvar Alterações';
+    } else {
+        title.textContent = 'Selecionar Ação';
+        confirmButton.textContent = 'Adicionar';
+    }
+
+    // Preencher os campos se estiver editando
+    if (actionToEdit) {
+        const targetElementSelect = document.getElementById('target-element');
+        targetElementSelect.value = actionToEdit.targetId || 'global';
+        
+        // Disparar o evento 'change' para carregar as ações disponíveis
+        updateAvailableActions(actionToEdit);
+
+    } else {
+        // Limpar campos se estiver adicionando uma nova
+        document.getElementById('target-element').value = '';
+        document.getElementById('available-actions').innerHTML = '';
+    }
     
     // Event listeners
-    document.getElementById('target-element').addEventListener('change', updateAvailableActions);
+    document.getElementById('target-element').addEventListener('change', () => updateAvailableActions());
     document.getElementById('cancel-action').addEventListener('click', hideActionSelector);
-    document.getElementById('confirm-action').addEventListener('click', addNewAction);
+    // Remover listener antigo para evitar duplicação
+    const newConfirmButton = confirmButton.cloneNode(true);
+    confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
+    newConfirmButton.addEventListener('click', saveAction);
 }
 
 // Esconder seletor de ação
 function hideActionSelector() {
     document.getElementById('action-selector').style.display = 'none';
+    editingActionIndex = null; // Limpar o índice de edição
 }
 
 // Atualizar ações disponíveis baseado no elemento alvo
-function updateAvailableActions() {
+function updateAvailableActions(actionToEdit = null) {
     const targetSelect = document.getElementById('target-element');
     const targetId = targetSelect.value;
     const actionsContainer = document.getElementById('available-actions');
@@ -1489,11 +1532,17 @@ function updateAvailableActions() {
         </div>
     `;
     
-    document.getElementById('action-type').addEventListener('change', updateActionParameters);
+    document.getElementById('action-type').addEventListener('change', () => updateActionParameters());
+
+    if (actionToEdit) {
+        const actionTypeSelect = document.getElementById('action-type');
+        actionTypeSelect.value = actionToEdit.actionType;
+        updateActionParameters(actionToEdit.value);
+    }
 }
 
 // Atualizar parâmetros da ação
-function updateActionParameters() {
+function updateActionParameters(valueToSet = null) {
     const actionType = document.getElementById('action-type').value;
     const parametersContainer = document.getElementById('action-parameters');
     
@@ -1509,136 +1558,116 @@ function updateActionParameters() {
         case 'change_text':
         case 'change_value':
         case 'show_alert':
-            parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Novo valor:</label>
-                <input type="text" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Digite o novo valor...">
-            `;
-            break;
         case 'change_checkbox_text':
-            parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Novo texto do checkbox:</label>
-                <input type="text" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Digite o novo texto...">
-            `;
-            break;
         case 'console_log':
             parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Mensagem para o console:</label>
-                <input type="text" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="Digite a mensagem...">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Valor:</label>
+                <input type="text" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${valueToSet || ''}">
             `;
             break;
         case 'change_color':
-            parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nova cor:</label>
-                <input type="color" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            `;
-            break;
         case 'change_background':
             parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Cor de fundo:</label>
-                <input type="color" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Cor:</label>
+                <input type="color" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${valueToSet || '#000000'}">
             `;
             break;
         case 'change_size':
             parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Novo tamanho (px):</label>
-                <input type="number" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="14">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Tamanho (px):</label>
+                <input type="number" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${valueToSet || '14'}">
             `;
             break;
         case 'change_border':
+            const borderValues = valueToSet ? valueToSet.split(',') : ['solid', '1', '#000000', '0'];
             parametersHTML = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Estilo:</label>
                         <select id="action-value-style" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                            <option value="solid">Sólida</option>
-                            <option value="dashed">Tracejada</option>
-                            <option value="dotted">Pontilhada</option>
-                            <option value="none">Nenhuma</option>
+                            <option value="solid" ${borderValues[0] === 'solid' ? 'selected' : ''}>Sólida</option>
+                            <option value="dashed" ${borderValues[0] === 'dashed' ? 'selected' : ''}>Tracejada</option>
+                            <option value="dotted" ${borderValues[0] === 'dotted' ? 'selected' : ''}>Pontilhada</option>
+                            <option value="none" ${borderValues[0] === 'none' ? 'selected' : ''}>Nenhuma</option>
                         </select>
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Largura (px):</label>
-                        <input type="number" id="action-value-width" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="1">
+                        <input type="number" id="action-value-width" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${borderValues[1]}">
                     </div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Cor:</label>
-                        <input type="color" id="action-value-color" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <input type="color" id="action-value-color" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${borderValues[2]}">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Raio (px):</label>
-                        <input type="number" id="action-value-radius" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="0">
+                        <input type="number" id="action-value-radius" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${borderValues[3]}">
                     </div>
                 </div>
             `;
             break;
         case 'resize_panel':
+            const sizeValues = valueToSet ? valueToSet.split(',') : ['200', '100'];
             parametersHTML = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nova largura (px):</label>
-                        <input type="number" id="action-value-width" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="200">
+                        <input type="number" id="action-value-width" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${sizeValues[0]}">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nova altura (px):</label>
-                        <input type="number" id="action-value-height" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="100">
+                        <input type="number" id="action-value-height" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${sizeValues[1]}">
                     </div>
                 </div>
             `;
             break;
         case 'move_element':
+            const posValues = valueToSet ? valueToSet.split(',') : ['100', '100'];
             parametersHTML = `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nova posição X (px):</label>
-                        <input type="number" id="action-value-x" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="100">
+                        <input type="number" id="action-value-x" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${posValues[0]}">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nova posição Y (px):</label>
-                        <input type="number" id="action-value-y" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="100">
+                        <input type="number" id="action-value-y" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${posValues[1]}">
                     </div>
                 </div>
             `;
             break;
         case 'show_hide':
-            parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Ação:</label>
-                <select id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <option value="show">Mostrar</option>
-                    <option value="hide">Ocultar</option>
-                    <option value="toggle">Alternar</option>
-                </select>
-            `;
-            break;
         case 'toggle_checkbox':
+        case 'disable_enable':
             parametersHTML = `
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Ação:</label>
                 <select id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <option value="check">Marcar</option>
-                    <option value="uncheck">Desmarcar</option>
-                    <option value="toggle">Alternar</option>
+                    ${actionType === 'show_hide' ? `
+                        <option value="show" ${valueToSet === 'show' ? 'selected' : ''}>Mostrar</option>
+                        <option value="hide" ${valueToSet === 'hide' ? 'selected' : ''}>Ocultar</option>
+                        <option value="toggle" ${valueToSet === 'toggle' ? 'selected' : ''}>Alternar</option>
+                    ` : actionType === 'toggle_checkbox' ? `
+                        <option value="check" ${valueToSet === 'check' ? 'selected' : ''}>Marcar</option>
+                        <option value="uncheck" ${valueToSet === 'uncheck' ? 'selected' : ''}>Desmarcar</option>
+                        <option value="toggle" ${valueToSet === 'toggle' ? 'selected' : ''}>Alternar</option>
+                    ` : `
+                        <option value="enable" ${valueToSet === 'enable' ? 'selected' : ''}>Habilitar</option>
+                        <option value="disable" ${valueToSet === 'disable' ? 'selected' : ''}>Desabilitar</option>
+                    `}
                 </select>
             `;
             break;
         case 'redirect_page':
             parametersHTML = `
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">URL:</label>
-                <input type="url" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" placeholder="https://...">
-            `;
-            break;
-        case 'disable_enable':
-            parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Ação:</label>
-                <select id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                    <option value="enable">Habilitar</option>
-                    <option value="disable">Desabilitar</option>
-                </select>
+                <input type="url" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${valueToSet || ''}">
             `;
             break;
         case 'manipulate_variable':
             parametersHTML = `
-                <input type="hidden" id="action-value">
+                <input type="hidden" id="action-value" value="${valueToSet || ''}">
                 <button type="button" onclick="showManipulateVariableModal(value => document.getElementById('action-value').value = value)" style="width: 100%; padding: 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Abrir Editor de Variáveis</button>
             `;
             break;
@@ -2880,12 +2909,37 @@ function getAllComponentsForSelection(currentComponentId) {
 
 // Configurar listeners para ações existentes
 function setupActionListeners() {
+    // Listener para remover ação
     document.querySelectorAll('.remove-action').forEach(button => {
         button.addEventListener('click', (e) => {
             const index = parseInt(e.target.dataset.index);
             removeAction(index);
         });
     });
+
+    // Listener para editar ação
+    document.querySelectorAll('.edit-action').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.index);
+            editAction(index);
+        });
+    });
+}
+
+// Editar uma ação existente
+function editAction(index) {
+    const actionItem = document.querySelector(`.action-item[data-index="${index}"]`);
+    if (!actionItem) return;
+
+    editingActionIndex = index; // Marcar que estamos editando
+
+    const actionData = {
+        targetId: actionItem.dataset.targetId,
+        actionType: actionItem.dataset.actionType,
+        value: actionItem.dataset.actionValue
+    };
+
+    showActionSelector(actionData); // Passar dados para o seletor
 }
 
 // Remover ação
@@ -2908,8 +2962,8 @@ function removeAction(index) {
     }
 }
 
-// Adicionar nova ação
-function addNewAction() {
+// Adicionar ou atualizar uma ação
+function saveAction() {
     const targetElement = document.getElementById('target-element').value;
     const actionType = document.getElementById('action-type').value;
     let actionValue = '';
@@ -2961,20 +3015,31 @@ function addNewAction() {
         value: actionValue
     };
     
-    // Adicionar à lista visual
+    // Se estiver editando, atualiza o item existente. Senão, adiciona um novo.
     const actionsList = document.getElementById('actions-list');
-    const currentIndex = actionsList.querySelectorAll('.action-item').length;
-    
-    const actionHTML = renderActionItem(newAction, currentIndex);
-    actionsList.insertAdjacentHTML('beforeend', actionHTML);
-    
-    // Configurar listener para o novo botão de remover
-    const newRemoveButton = actionsList.querySelector(`[data-index="${currentIndex}"]`);
-    if (newRemoveButton) {
-        newRemoveButton.addEventListener('click', (e) => {
-            const index = parseInt(e.target.dataset.index);
-            removeAction(index);
-        });
+    if (editingActionIndex !== null) {
+        const actionItem = actionsList.querySelector(`.action-item[data-index="${editingActionIndex}"]`);
+        if (actionItem) {
+            // Atualizar os dados do dataset
+            actionItem.dataset.targetId = newAction.targetId || 'global';
+            actionItem.dataset.actionType = newAction.actionType;
+            actionItem.dataset.actionValue = newAction.value;
+
+            // Atualizar o HTML interno
+            actionItem.innerHTML = renderActionItem(newAction, editingActionIndex).match(/<div class="action-item"[^>]*>([\s\S]*)<\/div>/)[1];
+            
+            // Reanexar listeners para os botões dentro do item atualizado
+            setupActionListeners();
+        }
+    } else {
+        // Adicionar à lista visual
+        const currentIndex = actionsList.querySelectorAll('.action-item').length;
+        
+        const actionHTML = renderActionItem(newAction, currentIndex);
+        actionsList.insertAdjacentHTML('beforeend', actionHTML);
+        
+        // Reanexar todos os listeners para garantir que os novos botões funcionem
+        setupActionListeners();
     }
     
     // Limpar seletor
@@ -3009,6 +3074,7 @@ function addNewAction() {
 
 // Variável global para armazenar o evento atualmente sendo editado
 let currentEditingEvent = null;
+let editingActionIndex = null; // <<< Nova variável
 
 // Salvar eventos do componente
 function saveComponentEvents(componentId) {
@@ -3934,10 +4000,10 @@ function closeSelectOptionsEditor() {
 function initializeVariablesPanel() {
     const variablesContent = document.getElementById('variables-content');
     variablesContent.innerHTML = `
-        <div id="variable-list" style="margin-bottom: 15px; height: calc(100% - 50px); overflow-y: auto;">
+        <div id="variable-list" style="margin-bottom: 10px; height: calc(100% - 50px); overflow-y: auto;">
             <!-- As variáveis serão listadas aqui -->
         </div>
-        <div id="variable-actions" style="padding-top: 10px; border-top: 1px solid #3e3e42; display: flex; gap: 5px;">
+        <div id="variable-actions" style="padding-top: 4px; border-top: 1px solid #3e3e42; display: flex; gap: 5px;">
             <button id="btn-show-add-var-modal" class="btn primary" style="flex: 1;">Adicionar Variável</button>
             <button id="btn-show-edit-vars-modal" class="btn" style="flex: 1;">Editar Variáveis</button>
         </div>
@@ -4053,6 +4119,7 @@ async function removeVariable(name, confirm = true) {
         delete projectVariables[name];
         logToConsole(`Variável "${name}" removida.`, 'info');
         renderVariableList();
+        refreshEditVariableList()
     }
 }
 
@@ -4402,5 +4469,3 @@ function setupVariableButtonListener() {
         editButton.addEventListener('click', showEditVariablesModal);
     }
 }
-
-
