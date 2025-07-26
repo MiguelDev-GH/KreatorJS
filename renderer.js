@@ -795,7 +795,6 @@ function generateStylePropertyInputs(componentDef, component) {
         { key: 'opacity', label: 'Opacidade', type: 'range', value: getPropertyValue(element, 'opacity') || '1', min: '0', max: '1', step: '0.1' },
         { key: 'transform', label: 'Transformação', type: 'text', value: getPropertyValue(element, 'transform') || 'none' },
         { key: 'cursor', label: 'Cursor', type: 'select', value: getPropertyValue(element, 'cursor') || 'default', options: ['default', 'pointer', 'text', 'move', 'not-allowed', 'grab', 'grabbing'] },
-        { key: 'overflow', label: 'Overflow', type: 'select', value: getPropertyValue(element, 'overflow') || 'visible', options: ['visible', 'hidden', 'scroll', 'auto'] },
         { key: 'textAlign', label: 'Alinhamento do Texto', type: 'select', value: getPropertyValue(element, 'textAlign') || 'left', options: ['left', 'center', 'right', 'justify'] }
     ];
     
@@ -1036,6 +1035,15 @@ function populateGlobalInspector() {
                 <label class="property-label">Cor de Fundo</label>
                 <input type="color" class="property-input" id="global-bg-color" value="${currentBgColor}">
             </div>
+            <div class="property-item">
+                <label class="property-label">Overflow</label>
+                <select class="property-input" id="global-overflow">
+                    <option value="visible" ${globalProjectSettings.overflow === 'visible' ? 'selected' : ''}>Visível</option>
+                    <option value="hidden" ${globalProjectSettings.overflow === 'hidden' ? 'selected' : ''}>Oculto</option>
+                    <option value="scroll" ${globalProjectSettings.overflow === 'scroll' ? 'selected' : ''}>Scroll</option>
+                    <option value="auto" ${globalProjectSettings.overflow === 'auto' ? 'selected' : ''}>Automático</option>
+                </select>
+            </div>
         </div>
         <div class="property-group">
             <div class="property-group-title">Eventos Globais</div>
@@ -1050,6 +1058,18 @@ function populateGlobalInspector() {
             globalProjectSettings.backgroundColor = e.target.value;
             if (canvas) {
                 canvas.style.backgroundColor = e.target.value;
+            }
+            saveState();
+        });
+    }
+
+    // Listener para o overflow
+    const overflowInput = document.getElementById('global-overflow');
+    if (overflowInput) {
+        overflowInput.addEventListener('input', (e) => {
+            globalProjectSettings.overflow = e.target.value;
+            if (canvas) {
+                canvas.style.overflow = e.target.value;
             }
             saveState();
         });
@@ -2282,7 +2302,7 @@ function runProject() {
     // Gerar e executar o projeto
     const htmlCode = generateHTML();
     const jsCode = generateJavaScript();
-    const bgColor = globalProjectSettings.backgroundColor;
+    const { backgroundColor, overflow } = globalProjectSettings;
     
     // Criar janela de preview
     const previewWindow = window.open('', '_blank', 'width=800,height=600');
@@ -2295,7 +2315,8 @@ function runProject() {
                 body { 
                     margin: 20px; 
                     font-family: Arial, sans-serif; 
-                    background-color: ${bgColor};
+                    background-color: ${backgroundColor};
+                    overflow: ${overflow || 'visible'};
                 }
             </style>
         </head>

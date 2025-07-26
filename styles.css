@@ -285,6 +285,7 @@ body {
 .inspector {
     padding: 16px;
     overflow-y: auto;
+    height: 100%;
 }
 
 .inspector-placeholder {
