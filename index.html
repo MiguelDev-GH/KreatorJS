@@ -7,6 +7,31 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+    <!-- Menu Inicial -->
+    <div id="initial-menu">
+        <div class="welcome-container">
+            <div class="welcome-header">
+                <img src="assets/icon.png" alt="KreatorJS Logo" class="welcome-logo">
+                <h1>KreatorJS</h1>
+            </div>
+            <div class="welcome-content">
+                <div class="main-actions">
+                    <ul>
+                        <li><button id="menu-new-project"><span class="icon">📄</span> Novo Projeto...</button></li>
+                        <li><button id="menu-open-project"><span class="icon">📁</span> Abrir Projeto...</button></li>
+                    </ul>
+                </div>
+                <div class="recent-projects">
+                    <h2>Recentes</h2>
+                    <ul id="recent-projects-list">
+                        <!-- Projetos recentes serão inseridos aqui -->
+                        <li><p>Nenhum projeto recente</p></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="app">
         <!-- Barra de ferramentas superior -->
         <div id="toolbar">

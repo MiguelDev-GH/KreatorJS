@@ -162,8 +162,42 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     populateComponentPalette();
     initializeVariablesPanel();
+    setupInitialMenu(); // Adicionado para configurar o menu inicial
     logToConsole('KreatorJS inicializado com sucesso!', 'success');
 });
+
+// Configuração do Menu Inicial
+function setupInitialMenu() {
+    const initialMenu = document.getElementById('initial-menu');
+    const appContainer = document.getElementById('app');
+    const btnNewProject = document.getElementById('menu-new-project');
+    const btnOpenProject = document.getElementById('menu-open-project');
+    const recentProjectsList = document.getElementById('recent-projects-list');
+
+    if (!initialMenu || !appContainer) return;
+
+    const showApp = () => {
+        initialMenu.style.display = 'none';
+        appContainer.style.display = 'flex';
+    };
+
+    btnNewProject.addEventListener('click', () => {
+        showApp();
+        newProject();
+    });
+
+    btnOpenProject.addEventListener('click', () => {
+        showApp();
+        openProject();
+    });
+
+    // Lógica de projetos recentes
+    // (Ainda sem armazenamento persistente, apenas como exemplo)
+    if (recentProjectsList) {
+        // Limpa a lista atual
+        recentProjectsList.innerHTML = '<li><p>Nenhum projeto recente</p></li>';
+    }
+}
 
 function showCustomConfirm(title, text) {
     return new Promise((resolve) => {
