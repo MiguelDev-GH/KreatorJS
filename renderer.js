@@ -3623,11 +3623,50 @@ function generateActionCode(action) {
     }
 
     function resolveValue(value) {
-        if (typeof value === 'string' && value.startsWith('<') && value.endsWith('>')) {
-            const varName = value.substring(1, value.length - 1);
+        if (typeof value !== 'string') {
+            return `'${escapeJavaScript(String(value || ''))}'`;
+        }
+    
+        // Regex para encontrar todas as ocorrências de <VARIAVEL>
+        const variableRegex = /<([a-zA-Z_][a-zA-Z0-9_]*)>/g;
+        const matches = [...value.matchAll(variableRegex)];
+    
+        // Se não houver variáveis na string, retorna a string literal
+        if (matches.length === 0) {
+            return `'${escapeJavaScript(value)}'`;
+        }
+    
+        // Se a string for APENAS uma variável (ex: "<IDADE>"), retorna o valor diretamente
+        if (matches.length === 1 && matches[0][0] === value) {
+            const varName = matches[0][1];
             return `projectVariables['${varName}'].value`;
         }
-        return `'${escapeJavaScript(value || '')}'`;
+    
+        // Se houver variáveis misturadas com texto, constrói uma string concatenada
+        let result = [];
+        let lastIndex = 0;
+    
+        for (const match of matches) {
+            const varName = match[1];
+            const startIndex = match.index;
+    
+            // Adiciona o texto literal antes da variável
+            if (startIndex > lastIndex) {
+                result.push(`'${escapeJavaScript(value.substring(lastIndex, startIndex))}'`);
+            }
+    
+            // Adiciona a referência da variável
+            result.push(`projectVariables['${varName}'].value`);
+    
+            lastIndex = startIndex + match[0].length;
+        }
+    
+        // Adiciona o texto literal restante após a última variável
+        if (lastIndex < value.length) {
+            result.push(`'${escapeJavaScript(value.substring(lastIndex))}'`);
+        }
+    
+        return result.join(' + ');
     }
     
     const resolvedValue = resolveValue(action.value || '');
