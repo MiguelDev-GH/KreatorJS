@@ -42,7 +42,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.ico"
+      "icon": "KreatorLogo.ico"
     },
     "mac": {
       "target": "dmg",
