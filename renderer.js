@@ -199,6 +199,30 @@ function setupInitialMenu() {
     }
 }
 
+function showCustomAlert(title, text) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-alert-modal');
+        const titleEl = document.getElementById('alert-modal-title');
+        const textEl = document.getElementById('alert-modal-text');
+        const okBtn = document.getElementById('alert-modal-ok');
+        const closeBtn = document.getElementById('alert-modal-close');
+
+        titleEl.textContent = title;
+        textEl.textContent = text;
+
+        modal.style.zIndex = "999999999"
+        modal.style.display = 'block';
+
+        const close = (value) => {
+            modal.style.display = 'none';
+            resolve(value);
+        };
+
+        okBtn.onclick = () => close(true);
+        closeBtn.onclick = () => close(true);
+    });
+}
+
 function showCustomConfirm(title, text) {
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-confirm-modal');
@@ -1173,6 +1197,7 @@ const eventSystem = {
         // Ações globais
         global: [
             { id: 'show_alert', name: 'Mostrar alerta', description: 'Exibir uma mensagem de alerta' },
+            { id: 'show_custom_alert', name: 'Mostrar alerta personalizado', description: 'Exibir uma mensagem de alerta personalizada' },
             { id: 'console_log', name: 'Log no console', description: 'Escrever mensagem no console do programa' },
             { id: 'redirect_page', name: 'Redirecionar página', description: 'Navegar para outra página' },
             { id: 'manipulate_variable', name: 'Manipular variáveis', description: 'Alterar o valor de uma variável' }
@@ -1699,6 +1724,7 @@ function updateActionParameters(valueToSet = null) {
         case 'change_text':
         case 'change_value':
         case 'show_alert':
+        case 'show_custom_alert':
         case 'change_checkbox_text':
         case 'console_log':
             parametersHTML = `
@@ -3727,6 +3753,9 @@ function generateActionCode(action) {
         switch (action.actionType) {
             case 'show_alert':
                 code = `    alert(${resolvedValue});\n`;
+                break;
+            case 'show_custom_alert':
+                code = `    showCustomAlert('Alert', ${resolvedValue});\n`;
                 break;
             case 'console_log':
                 code = `    window.logToConsoleInPreview(${resolvedValue}, 'info');\n`;
