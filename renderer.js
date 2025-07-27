@@ -4480,12 +4480,12 @@ function addVariable() {
     const type = typeInput.value;
 
     if (!name || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
-        logToConsole('Erro: Nome de variável inválido. Use apenas letras, números e underscores, e não comece com um número.', 'error');
+        showCustomAlert('Erro de Validação', 'Nome de variável inválido. Use apenas letras, números e underscores, e não comece com um número.');
         return;
     }
 
     if (projectVariables[name]) {
-        logToConsole(`Erro: A variável "${name}" já existe.`, 'error');
+        showCustomAlert('Erro de Validação', `A variável "${name}" já existe.`);
         return;
     }
 
@@ -4511,7 +4511,7 @@ function addVariable() {
                 break;
         }
     } catch (e) {
-        logToConsole(`Erro ao processar valor da variável: ${e.message}`, 'error');
+        showCustomAlert('Erro de Validação', `Erro ao processar valor da variável: ${e.message}`);
         return;
     }
 
@@ -4875,7 +4875,7 @@ function editVariable(name) {
                     break;
             }
         } catch (e) {
-            logToConsole(`Erro ao processar valor da variável: ${e.message}`, 'error');
+            showCustomAlert('Erro de Validação', `Erro ao processar valor da variável: ${e.message}`);
             return;
         }
 
