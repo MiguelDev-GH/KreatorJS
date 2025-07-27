@@ -1389,7 +1389,10 @@ function showManipulateVariableModal(callback) {
             </div>
             <div class="property-item">
                 <label class="property-label">Valor</label>
-                <input type="text" id="modal-manip-var-value" class="property-input">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <input type="text" id="modal-manip-var-value" class="property-input" style="flex: 1;">
+                    <button id="btn-get-prop" class="btn" style="padding: 8px 12px;">Pegar propriedade</button>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
@@ -1399,9 +1402,8 @@ function showManipulateVariableModal(callback) {
     `;
 
     modal.appendChild(modalContent);
-    document.body.appendChild(modal); // <--- O modal é adicionado AQUI
+    document.body.appendChild(modal);
 
-    // AGORA que o modal está no DOM, podemos adicionar os listeners aos seus elementos
     const closeModal = () => {
         const modal = document.getElementById(modalId);
         if (modal) {
@@ -1411,8 +1413,24 @@ function showManipulateVariableModal(callback) {
 
     modal.querySelector('.close-btn').addEventListener('click', closeModal);
     modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
-    
-    // Adicione o listener diretamente ao elemento após ele ser criado e anexado ao DOM
+
+    const opSelect = document.getElementById('modal-manip-var-op');
+    const getPropBtn = document.getElementById('btn-get-prop');
+
+    const toggleGetPropButton = () => {
+        getPropBtn.style.display = opSelect.value === 'set' ? 'block' : 'none';
+    };
+
+    opSelect.addEventListener('change', toggleGetPropButton);
+    toggleGetPropButton(); // Set initial state
+
+    getPropBtn.addEventListener('click', () => {
+        // A função para mostrar o modal de seleção de propriedade será chamada aqui
+        showPropertySelectorModal((propertyReference) => {
+            document.getElementById('modal-manip-var-value').value = propertyReference;
+        });
+    });
+
     const confirmBtn = document.getElementById('btn-confirm-manip-var');
     if (confirmBtn) {
         confirmBtn.addEventListener('click', () => {
@@ -3366,6 +3384,38 @@ function getElementById(id) {
     return document.getElementById(id);
 }
 
+function rgbToHex(rgb) {
+    if (!rgb || !rgb.includes('rgb')) return rgb;
+    const result = /^rgb\\((\\d+),\\s*(\\d+),\\s*(\\d+)\\)$/.exec(rgb);
+    if (!result) return rgb;
+    const r = parseInt(result[1], 10);
+    const g = parseInt(result[2], 10);
+    const b = parseInt(result[3], 10);
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+}
+
+function getPropertyValue(element, property) {
+    if (!element) return '';
+    const computedStyle = window.getComputedStyle(element);
+    let value = computedStyle[property];
+    if (!value) value = element.style[property];
+
+    switch (property) {
+        case 'text': return element.textContent || element.value || '';
+        case 'value': return element.value || '';
+        case 'placeholder': return element.placeholder || '';
+        case 'src': return element.src || '';
+        case 'alt': return element.alt || '';
+        case 'checked': return element.checked || false;
+        case 'backgroundColor':
+        case 'color':
+        case 'borderColor':
+            return rgbToHex(value);
+        default:
+            return value || '';
+    }
+}
+
 function showElement(id) {
     const element = getElementById(id);
     if (element) element.style.display = 'block';
@@ -3389,7 +3439,6 @@ function changeText(id, text) {
         if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
             element.value = text;
         } else if (element.tagName === 'LABEL' && element.querySelector('input[type="checkbox"]')) {
-            // Para checkbox, preservar o checkbox e alterar apenas o texto
             const checkbox = element.querySelector('input[type="checkbox"]');
             const isChecked = checkbox.checked;
             element.innerHTML = '<input type="checkbox"' + (isChecked ? ' checked' : '') + '> ' + text;
@@ -3464,23 +3513,16 @@ function enableElement(id) {
 }
 
 function manipulateVariable(name, operation, value) {
-    if (projectVariables[name]) {
+    if (projectVariables.hasOwnProperty(name)) {
         let currentValue = projectVariables[name].value;
         let newValue = value;
 
-        // Se o valor for uma referência a outra variável, use o valor dela
-        if (typeof value === 'string' && value.startsWith('<') && value.endsWith('>')) {
-            const referencedVarName = value.substring(1, value.length - 1);
-            if (projectVariables[referencedVarName]) {
-                newValue = projectVariables[referencedVarName].value;
-            }
-        }
-
+        // O valor já foi resolvido por resolveValue, então podemos usá-lo diretamente.
         const numValue = parseFloat(newValue);
 
         switch (operation) {
             case 'set':
-                projectVariables[name].value = isNaN(numValue) ? newValue : numValue;
+                projectVariables[name].value = (projectVariables[name].type === 'number' && !isNaN(numValue)) ? numValue : newValue;
                 break;
             case 'add':
                 projectVariables[name].value = parseFloat(currentValue) + numValue;
@@ -3531,7 +3573,6 @@ function logToConsoleInPreview(message, type = 'info') {
             logType: type
         }, '*');
     }
-    // Fallback para o console do navegador
     console.log('[Preview] ' + message);
 }
 
@@ -3627,41 +3668,51 @@ function generateActionCode(action) {
             return `'${escapeJavaScript(String(value || ''))}'`;
         }
     
-        // Regex para encontrar todas as ocorrências de <VARIAVEL>
-        const variableRegex = /<([a-zA-Z_][a-zA-Z0-9_]*)>/g;
-        const matches = [...value.matchAll(variableRegex)];
+        // Regex para encontrar todas as ocorrências de <VARIAVEL> ou <ID.PROPRIEDADE>
+        const referenceRegex = /<([a-zA-Z0-9_.]+)>/g;
+        const matches = [...value.matchAll(referenceRegex)];
     
-        // Se não houver variáveis na string, retorna a string literal
+        // Se não houver referências na string, retorna a string literal
         if (matches.length === 0) {
             return `'${escapeJavaScript(value)}'`;
         }
     
-        // Se a string for APENAS uma variável (ex: "<IDADE>"), retorna o valor diretamente
+        // Se a string for APENAS uma referência (ex: "<idade>" ou "<input_1.text>"), retorna o valor diretamente
         if (matches.length === 1 && matches[0][0] === value) {
-            const varName = matches[0][1];
-            return `projectVariables['${varName}'].value`;
+            const ref = matches[0][1];
+            if (ref.includes('.')) {
+                const [id, prop] = ref.split('.');
+                return `getPropertyValue(getElementById('${id}'), '${prop}')`;
+            } else {
+                return `projectVariables['${ref}'].value`;
+            }
         }
     
-        // Se houver variáveis misturadas com texto, constrói uma string concatenada
+        // Se houver referências misturadas com texto, constrói uma string concatenada
         let result = [];
         let lastIndex = 0;
     
         for (const match of matches) {
-            const varName = match[1];
+            const ref = match[1];
             const startIndex = match.index;
     
-            // Adiciona o texto literal antes da variável
+            // Adiciona o texto literal antes da referência
             if (startIndex > lastIndex) {
                 result.push(`'${escapeJavaScript(value.substring(lastIndex, startIndex))}'`);
             }
     
-            // Adiciona a referência da variável
-            result.push(`projectVariables['${varName}'].value`);
+            // Adiciona a referência
+            if (ref.includes('.')) {
+                const [id, prop] = ref.split('.');
+                result.push(`getPropertyValue(getElementById('${id}'), '${prop}')`);
+            } else {
+                result.push(`projectVariables['${ref}'].value`);
+            }
     
             lastIndex = startIndex + match[0].length;
         }
     
-        // Adiciona o texto literal restante após a última variável
+        // Adiciona o texto literal restante após a última referência
         if (lastIndex < value.length) {
             result.push(`'${escapeJavaScript(value.substring(lastIndex))}'`);
         }
@@ -3686,7 +3737,8 @@ function generateActionCode(action) {
                 break;
             case 'manipulate_variable':
                 if (action.value && action.value.includes(',')) {
-                    const [varName, operation, value] = action.value.split(',');
+                    const [varName, operation, ...valueParts] = action.value.split(',');
+                    const value = valueParts.join(',');
                     const resolvedManipulationValue = resolveValue(value);
                     code = `    manipulateVariable('${varName}', '${operation}', ${resolvedManipulationValue});\n`;
                 }
@@ -3714,13 +3766,13 @@ function generateActionCode(action) {
                 }
                 break;
             case 'change_color':
-                code = `    changeColor('${action.targetId}', '${escapedValue}');\n`;
+                code = `    changeColor('${action.targetId}', ${resolvedValue});\n`;
                 break;
             case 'change_background':
-                code = `    changeBackground('${action.targetId}', '${escapedValue}');\n`;
+                code = `    changeBackground('${action.targetId}', ${resolvedValue});\n`;
                 break;
             case 'change_size':
-                code = `    changeFontSize('${action.targetId}', ${action.value || 14});\n`;
+                code = `    changeFontSize('${action.targetId}', ${resolvedValue});\n`;
                 break;
             case 'change_border':
                 if (action.value && action.value.includes(',')) {
@@ -3766,6 +3818,95 @@ function generateActionCode(action) {
     }
     
     return code;
+}
+
+// Modal de seleção de propriedade
+function showPropertySelectorModal(callback) {
+    const modalId = 'property-selector-modal';
+    if (document.getElementById(modalId)) return;
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.style.zIndex = '10002'; // On top of the variable modal
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.maxWidth = '600px';
+    modalContent.style.height = 'auto';
+
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Pegar Propriedade de Componente</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body" style="display: flex; gap: 20px;">
+            <div style="flex: 1;">
+                <label class="property-label">Componente</label>
+                <select id="prop-selector-component" class="property-input" size="10">
+                    ${getAllComponentsForSelection().map(comp => `<option value="${comp.id}">${comp.id} (${comp.type})</option>`).join('')}
+                </select>
+            </div>
+            <div style="flex: 1;">
+                <label class="property-label">Propriedade</label>
+                <select id="prop-selector-property" class="property-input" size="10" disabled>
+                    <!-- Propriedades serão carregadas aqui -->
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Cancelar</button>
+            <button id="btn-confirm-prop-select" class="btn primary" disabled>Confirmar</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    const closeModal = () => modal.remove();
+
+    const componentSelect = document.getElementById('prop-selector-component');
+    const propertySelect = document.getElementById('prop-selector-property');
+    const confirmBtn = document.getElementById('btn-confirm-prop-select');
+
+    componentSelect.addEventListener('change', () => {
+        const componentId = componentSelect.value;
+        const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
+        propertySelect.innerHTML = '';
+        propertySelect.disabled = true;
+        confirmBtn.disabled = true;
+
+        if (component) {
+            const componentType = component.dataset.componentType;
+            const componentDef = componentLibrary.find(c => c.type === componentType);
+            if (componentDef) {
+                const props = Object.keys(componentDef.defaultProps);
+                // Adicionar propriedades dinâmicas como 'value' ou 'checked'
+                if (['input', 'textarea', 'select'].includes(componentType)) props.push('value');
+                if (componentType === 'checkbox') props.push('checked');
+
+                propertySelect.innerHTML = props.map(prop => `<option value="${prop}">${prop}</option>`).join('');
+                propertySelect.disabled = false;
+            }
+        }
+    });
+
+    propertySelect.addEventListener('change', () => {
+        confirmBtn.disabled = !propertySelect.value;
+    });
+
+    confirmBtn.addEventListener('click', () => {
+        const componentId = componentSelect.value;
+        const property = propertySelect.value;
+        if (componentId && property) {
+            callback(`<${componentId}.${property}>`);
+            closeModal();
+        }
+    });
+
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
 }
 
 // Atualizar função de geração de JavaScript
