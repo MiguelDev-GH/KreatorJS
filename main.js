@@ -1,6 +1,7 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
 
 let mainWindow;
 
@@ -244,3 +245,37 @@ app.on('activate', () => {
   }
 });
 
+ipcMain.on('package-app-start', (event, { appName, appIcon, outputDir }) => {
+  const packageJsonPath = path.join(__dirname, 'package.json');
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+
+  // Update package.json with user's choices
+  packageJson.productName = appName;
+  packageJson.build.directories.output = outputDir;
+  if (appIcon) {
+    packageJson.build.win.icon = appIcon;
+    packageJson.build.mac.icon = appIcon;
+    packageJson.build.linux.icon = appIcon;
+  }
+
+  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
+
+  event.sender.send('package-app-progress', 'Iniciando o empacotamento...');
+
+  const command = `electron-builder --dir`;
+  const child = exec(command, (error, stdout, stderr) => {
+    if (error) {
+      event.sender.send('package-app-error', `Erro ao empacotar: ${error.message}`);
+      return;
+    }
+    if (stderr) {
+      event.sender.send('package-app-error', `Erro no processo de empacotamento: ${stderr}`);
+      return;
+    }
+    event.sender.send('package-app-complete', `Aplicação empacotada com sucesso em: ${outputDir}`);
+  });
+
+  child.stdout.on('data', (data) => {
+    event.sender.send('package-app-progress', data.toString());
+  });
+});

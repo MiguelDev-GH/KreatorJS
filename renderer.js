@@ -305,6 +305,18 @@ function setupEventListeners() {
         ipcRenderer.on('menu-package-app', packageProject);
         ipcRenderer.on('menu-undo', undo);
         ipcRenderer.on('menu-redo', redo);
+
+        ipcRenderer.on('package-app-progress', (event, message) => {
+            logToConsole(message, 'info');
+        });
+
+        ipcRenderer.on('package-app-complete', (event, message) => {
+            logToConsole(message, 'success');
+        });
+
+        ipcRenderer.on('package-app-error', (event, message) => {
+            logToConsole(message, 'error');
+        });
     }
     
     // Atalhos de teclado
@@ -2386,8 +2398,102 @@ function runProject() {
 }
 
 function packageProject() {
-    // Implementar empacotamento
-    logToConsole('Funcionalidade de empacotamento em desenvolvimento', 'warning');
+    // Create a modal for packaging options
+    const modal = document.createElement('div');
+    modal.id = 'package-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 500px;
+    `;
+
+    modalContent.innerHTML = `
+        <h2 style="margin-top: 0;">Empacotar Aplicação</h2>
+        <div style="margin-bottom: 15px;">
+            <label for="app-name" style="display: block; margin-bottom: 5px;">Nome da Aplicação:</label>
+            <input type="text" id="app-name" style="width: 100%; padding: 8px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label for="app-icon" style="display: block; margin-bottom: 5px;">Ícone da Aplicação:</label>
+            <div style="display: flex;">
+                <input type="text" id="app-icon" style="width: 100%; padding: 8px;" readonly>
+                <button id="browse-icon" style="margin-left: 10px;">Procurar</button>
+            </div>
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label for="output-dir" style="display: block; margin-bottom: 5px;">Salvar em:</label>
+            <div style="display: flex;">
+                <input type="text" id="output-dir" style="width: 100%; padding: 8px;" readonly>
+                <button id="browse-dir" style="margin-left: 10px;">Procurar</button>
+            </div>
+        </div>
+        <div style="text-align: right;">
+            <button id="cancel-package" style="margin-right: 10px;">Cancelar</button>
+            <button id="start-package">Empacotar</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    // Event listeners
+    document.getElementById('browse-icon').addEventListener('click', async () => {
+        const result = await ipcRenderer.invoke('show-open-dialog', {
+            properties: ['openFile'],
+            filters: [{ name: 'Images', extensions: ['ico', 'png'] }]
+        });
+        if (!result.canceled && result.filePaths.length > 0) {
+            document.getElementById('app-icon').value = result.filePaths[0];
+        }
+    });
+
+    document.getElementById('browse-dir').addEventListener('click', async () => {
+        const result = await ipcRenderer.invoke('show-open-dialog', {
+            properties: ['openDirectory']
+        });
+        if (!result.canceled && result.filePaths.length > 0) {
+            document.getElementById('output-dir').value = result.filePaths[0];
+        }
+    });
+
+    document.getElementById('cancel-package').addEventListener('click', () => {
+        modal.remove();
+    });
+
+    document.getElementById('start-package').addEventListener('click', () => {
+        const appName = document.getElementById('app-name').value;
+        const appIcon = document.getElementById('app-icon').value;
+        const outputDir = document.getElementById('output-dir').value;
+
+        if (!appName || !outputDir) {
+            logToConsole('Nome da aplicação e diretório de saída são obrigatórios.', 'error');
+            return;
+        }
+
+        ipcRenderer.send('package-app-start', {
+            appName,
+            appIcon,
+            outputDir
+        });
+
+        modal.remove();
+    });
 }
 
 // Gerar código HTML
