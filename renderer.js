@@ -3399,7 +3399,7 @@ function getPropertyValue(element, property) {
     const computedStyle = window.getComputedStyle(element);
     let value = computedStyle[property];
     if (!value) value = element.style[property];
-
+    
     switch (property) {
         case 'text': return element.textContent || element.value || '';
         case 'value': return element.value || '';
@@ -3885,7 +3885,7 @@ function showPropertySelectorModal(callback) {
                 // Adicionar propriedades dinâmicas como 'value' ou 'checked'
                 if (['input', 'textarea', 'select'].includes(componentType)) props.push('value');
                 if (componentType === 'checkbox') props.push('checked');
-
+                
                 propertySelect.innerHTML = props.map(prop => `<option value="${prop}">${prop}</option>`).join('');
                 propertySelect.disabled = false;
             }
