@@ -2255,8 +2255,20 @@ async function openProject(projectPath) {
 
 // Função auxiliar para carregar projeto a partir dos dados
 function loadProjectFromData(projectData) {
-    // Limpar designer atual
-    clearDesigner(false);
+    // Limpar estado atual antes de carregar o novo
+    clearAll(false);
+
+    // Carregar configurações globais, se existirem
+    if (projectData.globalSettings) {
+        globalProjectSettings = projectData.globalSettings;
+    }
+
+    // Aplicar configurações globais na UI
+    const canvas = document.getElementById('designer-canvas');
+    if (canvas) {
+        canvas.style.backgroundColor = globalProjectSettings.backgroundColor || '#ffffff';
+        canvas.style.overflow = globalProjectSettings.overflow || 'visible';
+    }
     
     // Carregar componentes
     loadProjectComponents(projectData.components);
@@ -2269,6 +2281,9 @@ function loadProjectFromData(projectData) {
     // Carregar variáveis
     projectVariables = projectData.variables || {};
     renderVariableList();
+
+    // Atualizar o inspetor de objetos para refletir o estado carregado (global)
+    populateGlobalInspector();
 }
 
 async function saveProject() {
@@ -2555,12 +2570,17 @@ async function clearAll(confirm = true) {
         projectVariables = {};
         componentEvents = {};
         globalEvents = {};
-        globalProjectSettings = { backgroundColor: '#ffffff' };
-        canvas.style.backgroundColor = globalProjectSettings.backgroundColor;
+        globalProjectSettings = { backgroundColor: '#ffffff', overflow: 'visible' }; // Redefinido para o padrão
+
+        // Aplicar redefinição na UI
+        if (canvas) {
+            canvas.style.backgroundColor = globalProjectSettings.backgroundColor;
+            canvas.style.overflow = globalProjectSettings.overflow;
+        }
         
         // Atualizar UIs
         renderVariableList();
-        populateGlobalInspector();
+        populateGlobalInspector(); // Isso irá ler os valores redefinidos de globalProjectSettings
         logToConsole('Projeto limpo e estado reiniciado.', 'success');
         
         // Salvar o estado limpo para o histórico de undo
@@ -2870,6 +2890,7 @@ function collectProjectData() {
         name: currentProject?.data?.name || "Projeto sem nome",
         description: currentProject?.data?.description || "",
         componentCounter: componentCounter,
+        globalSettings: globalProjectSettings,
         components: [],
         events: componentEvents || {},
         variables: projectVariables || {}
