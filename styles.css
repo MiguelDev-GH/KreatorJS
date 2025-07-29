@@ -1241,3 +1241,26 @@ button[style*="font-size: 12px"]:hover {
     font-weight: 500;
     color: white;
 }
+
+.suggestion-box {
+    position: absolute;
+    border: 1px solid #5a5a5a;
+    background-color: #3c3c3c;
+    color: #d4d4d4;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 10001;
+    display: none;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.suggestion-item:hover {
+    background-color: #4a4a4a;
+}

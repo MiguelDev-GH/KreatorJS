@@ -1146,7 +1146,8 @@ const eventSystem = {
         ],
         global: [
             { name: 'load', label: 'Ao Carregar a Página', description: 'Quando a página termina de carregar' },
-            { name: 'unload', label: 'Ao Fechar a Página', description: 'Quando o usuário fecha a página' }
+            { name: 'unload', label: 'Ao Fechar a Página', description: 'Quando o usuário fecha a página' },
+            { name: 'loop', label: 'Loop', description: 'Executa ações repetidamente em um intervalo de tempo' }
         ]
     },
     
@@ -1165,6 +1166,7 @@ const eventSystem = {
         
         // Ações para elementos visuais (div, image, button)
         visual: [
+            { id: 'change_button_text', name: 'Alterar texto do botão', description: 'Mudar o texto do botão' },
             { id: 'change_background', name: 'Alterar fundo', description: 'Mudar cor de fundo' },
             { id: 'change_border', name: 'Alterar borda', description: 'Mudar estilo da borda' },
             { id: 'change_size', name: 'Alterar tamanho', description: 'Mudar largura e altura' },
@@ -1281,7 +1283,7 @@ function showEventEditorModal(component, componentId, componentType) {
                             <div style="font-size: 12px; color: #666;">${event.description}</div>
                             ${currentEvents[event.name] ? `
                                 <div style="font-size: 11px; color: #2196f3; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                    <span>✓ Configurado (${currentEvents[event.name].length} ação/ões)</                                    <button onclick="selectEventForEditing(\'${event.name}\', \'${componentType}\', \'${componentId}\')" style="
+                                    <span>✓ Configurado (${(currentEvents[event.name].actions || currentEvents[event.name]).length} ação/ões)</                                    <button onclick="selectEventForEditing(\'${event.name}\', \'${componentType}\', \'${componentId}\')" style="
                                         background: #28a745;
                                         color: white;
                                         border: none;
@@ -1499,9 +1501,19 @@ function selectEventForEditing(eventName, componentType, componentId) {
     
     // Atualizar info do evento selecionado
     const eventInfo = eventSystem.availableEvents[componentType].find(e => e.name === eventName);
-    document.getElementById('selected-event-info').innerHTML = `
-        Configurando: <strong>${eventInfo.label}</strong> - ${eventInfo.description}
-    `;
+    let eventConfigHTML = `Configurando: <strong>${eventInfo.label}</strong> - ${eventInfo.description}`;
+
+    if (eventName === 'loop') {
+        const currentInterval = (globalEvents.loop && globalEvents.loop.interval) ? globalEvents.loop.interval : 1000;
+        eventConfigHTML += `
+            <div style="margin-top: 10px;">
+                <label for="loop-interval" style="font-weight: bold;">Intervalo (ms):</label>
+                <input type="number" id="loop-interval" value="${currentInterval}" style="width: 100px; margin-left: 5px; padding: 4px;">
+            </div>
+        `;
+    }
+
+    document.getElementById('selected-event-info').innerHTML = eventConfigHTML;
     
     // Carregar editor de ações
     loadActionsEditor(eventName, componentType, componentId);
@@ -1513,7 +1525,15 @@ function loadActionsEditor(eventName, componentType, componentId) {
     const isGlobal = componentType === 'global';
     
     // Obter ações já configuradas para este evento
-    const currentActions = isGlobal ? (globalEvents[eventName] || []) : getCurrentEventActions(componentId, eventName);
+    let currentActions = [];
+    if (isGlobal) {
+        const eventData = globalEvents[eventName];
+        if (eventData) {
+            currentActions = eventData.actions || eventData; // Compatibilidade com o formato antigo
+        }
+    } else {
+        currentActions = getCurrentEventActions(componentId, eventName);
+    }
     
     actionsEditor.innerHTML = `
         <div style="margin-bottom: 20px;">
@@ -1721,6 +1741,7 @@ function updateActionParameters(valueToSet = null) {
     let parametersHTML = '';
     
     switch (actionType) {
+        case 'change_button_text':
         case 'change_text':
         case 'change_value':
         case 'show_alert':
@@ -1843,6 +1864,49 @@ function updateActionParameters(valueToSet = null) {
     }
     
     parametersContainer.innerHTML = parametersHTML;
+
+    const valueInput = document.getElementById('action-value');
+    if (valueInput) {
+        valueInput.addEventListener('input', (e) => {
+            const suggestionBox = document.getElementById('variable-suggestion-box');
+            const value = e.target.value;
+            const lastChar = value.slice(-1);
+
+            if (lastChar === '<') {
+                const rect = e.target.getBoundingClientRect();
+                suggestionBox.style.left = `${rect.left}px`;
+                suggestionBox.style.top = `${rect.bottom}px`;
+                suggestionBox.style.display = 'block';
+                
+                const variables = Object.keys(projectVariables);
+                const suggestions = variables.map(v => {
+                    const varValue = projectVariables[v].value;
+                    return `<div class="suggestion-item" data-value="<${v}>">${v}: <i>${varValue}</i></div>`;
+                }).join('');
+                suggestionBox.innerHTML = suggestions;
+            } else if (suggestionBox.style.display === 'block') {
+                const query = value.substring(value.lastIndexOf('<') + 1);
+                const variables = Object.keys(projectVariables).filter(v => v.toLowerCase().includes(query.toLowerCase()));
+                const suggestions = variables.map(v => {
+                    const varValue = projectVariables[v].value;
+                    return `<div class="suggestion-item" data-value="<${v}>">${v}: <i>${varValue}</i></div>`;
+                }).join('');
+                suggestionBox.innerHTML = suggestions;
+            } else {
+                suggestionBox.style.display = 'none';
+            }
+        });
+
+        suggestionBox.addEventListener('click', (e) => {
+            if (e.target.classList.contains('suggestion-item')) {
+                const value = e.target.dataset.value;
+                const lastOpen = valueInput.value.lastIndexOf('<');
+                valueInput.value = valueInput.value.substring(0, lastOpen) + value;
+                suggestionBox.style.display = 'none';
+                valueInput.focus();
+            }
+        });
+    }
 }
 
 // Gerar código de evento
@@ -2277,6 +2341,7 @@ function loadProjectFromData(projectData) {
     
     // Carregar eventos
     componentEvents = projectData.events || {};
+    globalEvents = projectData.globalEvents || {};
 
     // Carregar variáveis
     projectVariables = projectData.variables || {};
@@ -2571,7 +2636,7 @@ async function clearAll(confirm = true) {
         componentEvents = {};
         globalEvents = {};
         globalProjectSettings = { backgroundColor: '#ffffff', overflow: 'visible' }; // Redefinido para o padrão
-
+        
         // Aplicar redefinição na UI
         if (canvas) {
             canvas.style.backgroundColor = globalProjectSettings.backgroundColor;
@@ -2893,6 +2958,7 @@ function collectProjectData() {
         globalSettings: globalProjectSettings,
         components: [],
         events: componentEvents || {},
+        globalEvents: globalEvents || {},
         variables: projectVariables || {}
     };
     
@@ -3401,7 +3467,12 @@ function saveCurrentGlobalEventActions(eventName) {
 
     // Salvar ou remover evento global baseado nas ações
     if (actions.length > 0) {
-        globalEvents[eventName] = actions;
+        const eventData = { actions: actions };
+        if (eventName === 'loop') {
+            const intervalInput = document.getElementById('loop-interval');
+            eventData.interval = intervalInput ? parseInt(intervalInput.value) || 1000 : 1000;
+        }
+        globalEvents[eventName] = eventData;
     } else {
         delete globalEvents[eventName];
     }
@@ -3628,18 +3699,36 @@ function logToConsoleInPreview(message, type = 'info') {
     
     // Funções de Eventos Globais
     Object.keys(globalEvents).forEach(eventName => {
-        const actions = globalEvents[eventName];
-        js += `
+        const eventData = globalEvents[eventName];
+        const actions = eventData.actions || eventData; // Compatibilidade com o formato antigo
+        const interval = eventData.interval || 1000;
+
+        if (eventName === 'loop') {
+            js += `
+// Evento Global: ${eventName}
+function global_loop() {
+    console.log('Loop executando...');
+`;
+            actions.forEach(action => {
+                js += generateActionCode(action);
+            });
+            js += `}
+setInterval(global_loop, ${interval});
+
+`;
+        } else {
+            js += `
 // Evento Global: ${eventName}
 function global_${eventName}(event) {
     console.log('Evento global ${eventName} disparado');
 `;
-        actions.forEach(action => {
-            js += generateActionCode(action);
-        });
-        js += `}
+            actions.forEach(action => {
+                js += generateActionCode(action);
+            });
+            js += `}
 
 `;
+        }
     });
 
     components.forEach(component => {
@@ -3688,7 +3777,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Eventos Globais
     Object.keys(globalEvents).forEach(eventName => {
-        js += `    window.addEventListener('${eventName}', global_${eventName});\n`;
+        if (eventName !== 'loop') {
+            js += `    window.addEventListener('${eventName}', global_${eventName});\n`;
+        }
     });
     
     js += '});';
@@ -3797,6 +3888,9 @@ function generateActionCode(action) {
     } else {
         // Ação em elemento específico
         switch (action.actionType) {
+            case 'change_button_text':
+                code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
+                break;
             case 'change_text':
                 code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
                 break;
