@@ -2,16 +2,8 @@
 // Lógica principal da IDE
 
 // Verificar se está rodando no Electron ou no navegador
-const isElectron = typeof require !== 'undefined' && typeof require('electron') !== 'undefined';
-let ipcRenderer = null;
-
-if (isElectron) {
-    try {
-        ipcRenderer = require('electron').ipcRenderer;
-    } catch (e) {
-        console.log('Rodando no navegador, funcionalidades do Electron desabilitadas');
-    }
-}
+const isElectron = typeof window.electronAPI !== 'undefined';
+const ipcRenderer = isElectron ? window.electronAPI : null;
 
 // Estado global da aplicação
 let currentProject = null;
@@ -436,6 +428,7 @@ function createComponent(type, x, y) {
     
     // Salvar estado para undo
     saveState();
+    renderComponentTree();
     
     logToConsole(`Componente ${componentDef.name} adicionado (ID: ${componentId})`, 'success');
 }
@@ -633,6 +626,7 @@ function selectComponent(component) {
     } else {
         populateGlobalInspector();
     }
+    renderComponentTree();
 }
 
 // Popular inspetor de objetos
@@ -808,7 +802,7 @@ function generateStylePropertyInputs(componentDef, component) {
             <div class="property-subsection-title">Posicionamento</div>
             <div class="property-item">
                 <label class="property-label">Z-Index (Camada)</label>
-                <input type="number" class="property-input" data-property="zIndex" value="${element.style.zIndex || '0'}" min="0" max="9999">
+                <input type="number" class="property-input" data-property="zIndex" value="${element.style.zIndex || '1'}" min="1" max="9999">
             </div>
         </div>
     `;
@@ -1020,13 +1014,17 @@ function updateComponentProperty(property, value) {
             element.style.borderRadius = value;
             break;
         case 'zIndex':
-            element.style.zIndex = value;
-            // Garantir que o wrapper também tenha z-index para empilhamento correto
-            selectedComponent.style.zIndex = value;
-            // Se o valor for negativo, ajustar para 0 para evitar que o componente suma atrás do canvas
-            if (parseInt(value) < 0) {
-                selectedComponent.style.zIndex = 0;
-                element.style.zIndex = 0;
+            let zIndexValue = parseInt(value) || 1;
+            if (zIndexValue < 1) {
+                zIndexValue = 1;
+            }
+            element.style.zIndex = zIndexValue;
+            selectedComponent.style.zIndex = zIndexValue;
+            
+            // Atualizar o valor no input para refletir a correção
+            const zIndexInput = document.querySelector('[data-property="zIndex"]');
+            if (zIndexInput) {
+                zIndexInput.value = zIndexValue;
             }
             break;
         default:
@@ -1146,8 +1144,7 @@ const eventSystem = {
         ],
         global: [
             { name: 'load', label: 'Ao Carregar a Página', description: 'Quando a página termina de carregar' },
-            { name: 'unload', label: 'Ao Fechar a Página', description: 'Quando o usuário fecha a página' },
-            { name: 'loop', label: 'Loop', description: 'Executa ações repetidamente em um intervalo de tempo' }
+            { name: 'unload', label: 'Ao Fechar a Página', description: 'Quando o usuário fecha a página' }
         ]
     },
     
@@ -1166,7 +1163,6 @@ const eventSystem = {
         
         // Ações para elementos visuais (div, image, button)
         visual: [
-            { id: 'change_button_text', name: 'Alterar texto do botão', description: 'Mudar o texto do botão' },
             { id: 'change_background', name: 'Alterar fundo', description: 'Mudar cor de fundo' },
             { id: 'change_border', name: 'Alterar borda', description: 'Mudar estilo da borda' },
             { id: 'change_size', name: 'Alterar tamanho', description: 'Mudar largura e altura' },
@@ -1218,8 +1214,17 @@ function editComponentEvent(component) {
     logToConsole(`Editando eventos do componente ${componentId}`, 'info');
 }
 
+// Variavel para guardar o estado dos eventos antes de abrir o modal
+let eventsBackup = null;
+
 // Mostrar modal do editor de eventos
 function showEventEditorModal(component, componentId, componentType) {
+    // Fazer backup do estado atual dos eventos
+    eventsBackup = {
+        componentEvents: JSON.parse(JSON.stringify(componentEvents)),
+        globalEvents: JSON.parse(JSON.stringify(globalEvents))
+    };
+
     const isGlobal = componentType === 'global';
     // Criar modal
     const modal = document.createElement('div');
@@ -1283,7 +1288,7 @@ function showEventEditorModal(component, componentId, componentType) {
                             <div style="font-size: 12px; color: #666;">${event.description}</div>
                             ${currentEvents[event.name] ? `
                                 <div style="font-size: 11px; color: #2196f3; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                    <span>✓ Configurado (${(currentEvents[event.name].actions || currentEvents[event.name]).length} ação/ões)</                                    <button onclick="selectEventForEditing(\'${event.name}\', \'${componentType}\', \'${componentId}\')" style="
+                                    <span>✓ Configurado (${currentEvents[event.name].length} ação/ões)</                                    <button onclick="selectEventForEditing(\'${event.name}\', \'${componentType}\', \'${componentId}\')" style="
                                         background: #28a745;
                                         color: white;
                                         border: none;
@@ -1342,17 +1347,18 @@ function showEventEditorModal(component, componentId, componentType) {
     // Event listeners
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
-            closeEventEditorModal();
+            closeEventEditorModal(false); // Cancelar
         }
     });
     
-    document.getElementById('cancel-events').addEventListener('click', closeEventEditorModal);
+    document.getElementById('cancel-events').addEventListener('click', () => closeEventEditorModal(false));
     document.getElementById('save-events').addEventListener('click', () => {
         if (isGlobal) {
             saveGlobalEvents();
         } else {
             saveComponentEvents(componentId);
         }
+        closeEventEditorModal(true); // Salvar
     });
     
     // Event listeners para eventos
@@ -1370,11 +1376,18 @@ function showEventEditorModal(component, componentId, componentType) {
 }
 
 // Fechar modal do editor de eventos
-function closeEventEditorModal() {
+function closeEventEditorModal(isSaving = false) {
     const modal = document.getElementById('event-editor-modal');
     if (modal) {
         modal.remove();
     }
+
+    if (!isSaving && eventsBackup) {
+        // Se não estiver salvando (ou seja, cancelou), restaura o backup
+        componentEvents = eventsBackup.componentEvents;
+        globalEvents = eventsBackup.globalEvents;
+    }
+    eventsBackup = null; // Limpa o backup
 }
 
 function showManipulateVariableModal(callback) {
@@ -1501,19 +1514,9 @@ function selectEventForEditing(eventName, componentType, componentId) {
     
     // Atualizar info do evento selecionado
     const eventInfo = eventSystem.availableEvents[componentType].find(e => e.name === eventName);
-    let eventConfigHTML = `Configurando: <strong>${eventInfo.label}</strong> - ${eventInfo.description}`;
-
-    if (eventName === 'loop') {
-        const currentInterval = (globalEvents.loop && globalEvents.loop.interval) ? globalEvents.loop.interval : 1000;
-        eventConfigHTML += `
-            <div style="margin-top: 10px;">
-                <label for="loop-interval" style="font-weight: bold;">Intervalo (ms):</label>
-                <input type="number" id="loop-interval" value="${currentInterval}" style="width: 100px; margin-left: 5px; padding: 4px;">
-            </div>
-        `;
-    }
-
-    document.getElementById('selected-event-info').innerHTML = eventConfigHTML;
+    document.getElementById('selected-event-info').innerHTML = `
+        Configurando: <strong>${eventInfo.label}</strong> - ${eventInfo.description}
+    `;
     
     // Carregar editor de ações
     loadActionsEditor(eventName, componentType, componentId);
@@ -1525,15 +1528,7 @@ function loadActionsEditor(eventName, componentType, componentId) {
     const isGlobal = componentType === 'global';
     
     // Obter ações já configuradas para este evento
-    let currentActions = [];
-    if (isGlobal) {
-        const eventData = globalEvents[eventName];
-        if (eventData) {
-            currentActions = eventData.actions || eventData; // Compatibilidade com o formato antigo
-        }
-    } else {
-        currentActions = getCurrentEventActions(componentId, eventName);
-    }
+    const currentActions = isGlobal ? (globalEvents[eventName] || []) : getCurrentEventActions(componentId, eventName);
     
     actionsEditor.innerHTML = `
         <div style="margin-bottom: 20px;">
@@ -1741,7 +1736,6 @@ function updateActionParameters(valueToSet = null) {
     let parametersHTML = '';
     
     switch (actionType) {
-        case 'change_button_text':
         case 'change_text':
         case 'change_value':
         case 'show_alert':
@@ -1864,49 +1858,6 @@ function updateActionParameters(valueToSet = null) {
     }
     
     parametersContainer.innerHTML = parametersHTML;
-
-    const valueInput = document.getElementById('action-value');
-    if (valueInput) {
-        valueInput.addEventListener('input', (e) => {
-            const suggestionBox = document.getElementById('variable-suggestion-box');
-            const value = e.target.value;
-            const lastChar = value.slice(-1);
-
-            if (lastChar === '<') {
-                const rect = e.target.getBoundingClientRect();
-                suggestionBox.style.left = `${rect.left}px`;
-                suggestionBox.style.top = `${rect.bottom}px`;
-                suggestionBox.style.display = 'block';
-                
-                const variables = Object.keys(projectVariables);
-                const suggestions = variables.map(v => {
-                    const varValue = projectVariables[v].value;
-                    return `<div class="suggestion-item" data-value="<${v}>">${v}: <i>${varValue}</i></div>`;
-                }).join('');
-                suggestionBox.innerHTML = suggestions;
-            } else if (suggestionBox.style.display === 'block') {
-                const query = value.substring(value.lastIndexOf('<') + 1);
-                const variables = Object.keys(projectVariables).filter(v => v.toLowerCase().includes(query.toLowerCase()));
-                const suggestions = variables.map(v => {
-                    const varValue = projectVariables[v].value;
-                    return `<div class="suggestion-item" data-value="<${v}>">${v}: <i>${varValue}</i></div>`;
-                }).join('');
-                suggestionBox.innerHTML = suggestions;
-            } else {
-                suggestionBox.style.display = 'none';
-            }
-        });
-
-        suggestionBox.addEventListener('click', (e) => {
-            if (e.target.classList.contains('suggestion-item')) {
-                const value = e.target.dataset.value;
-                const lastOpen = valueInput.value.lastIndexOf('<');
-                valueInput.value = valueInput.value.substring(0, lastOpen) + value;
-                suggestionBox.style.display = 'none';
-                valueInput.focus();
-            }
-        });
-    }
 }
 
 // Gerar código de evento
@@ -2286,9 +2237,11 @@ async function openProject(projectPath) {
                         try {
                             const projectData = JSON.parse(e.target.result);
                             loadProjectFromData(projectData);
+                            updateUI()
                             logToConsole(`Projeto carregado: ${file.name}`, "success");
                         } catch (error) {
-                            logToConsole(`Erro ao carregar projeto: ${error.message}`, "error");
+                            logToConsole(`Erro ao analisar o arquivo de projeto (JSON inválido): ${error.message}`, "error");
+                            showCustomAlert('Erro ao Abrir Projeto', 'O arquivo de projeto selecionado está corrompido ou em um formato inválido.');
                         }
                     };
                     reader.readAsText(file);
@@ -2306,11 +2259,17 @@ async function openProject(projectPath) {
                 return;
             }
 
-            const projectData = JSON.parse(readResult.content);
-            loadProjectFromData(projectData);
+            try {
+                const projectData = JSON.parse(readResult.content);
+                loadProjectFromData(projectData);
+                updateUI()
 
-            currentProject = { path: filePath, data: projectData };
-            logToConsole(`Projeto carregado: ${filePath}`, "success");
+                currentProject = { path: filePath, data: projectData };
+                logToConsole(`Projeto carregado: ${filePath}`, "success");
+            } catch (error) {
+                logToConsole(`Erro ao analisar o arquivo de projeto (JSON inválido): ${error.message}`, "error");
+                showCustomAlert('Erro ao Abrir Projeto', 'O arquivo de projeto selecionado está corrompido ou em um formato inválido.');
+            }
         }
     } catch (error) {
         logToConsole(`Erro ao abrir projeto: ${error.message}`, "error");
@@ -2341,7 +2300,6 @@ function loadProjectFromData(projectData) {
     
     // Carregar eventos
     componentEvents = projectData.events || {};
-    globalEvents = projectData.globalEvents || {};
 
     // Carregar variáveis
     projectVariables = projectData.variables || {};
@@ -2425,7 +2383,7 @@ async function saveProject() {
 function runProject() {
     // Gerar e executar o projeto
     const htmlCode = generateHTML();
-    const jsCode = generateJavaScript();
+    const jsCode = generateJavaScriptWithEvents();
     const { backgroundColor, overflow } = globalProjectSettings;
     
     // Criar janela de preview
@@ -2499,23 +2457,6 @@ function generateHTML() {
     return html;
 }
 
-// Gerar código JavaScript
-function generateJavaScript() {
-    const canvas = document.getElementById('designer-canvas');
-    const components = canvas.querySelectorAll('.designer-component');
-    
-    let js = '// Código JavaScript gerado pelo KreatorJS\n\n';
-    
-    components.forEach(component => {
-        const componentId = component.dataset.componentId;
-        const componentType = component.dataset.componentType;
-        
-        js += generateEventCode(componentId, componentType) + '\n\n';
-    });
-    
-    return js;
-}
-
 // Exportar código
 function exportCode(type) {
     let code, title;
@@ -2524,7 +2465,7 @@ function exportCode(type) {
         code = generateHTML();
         title = 'HTML Gerado';
     } else if (type === 'js') {
-        code = generateJavaScript();
+        code = generateJavaScriptWithEvents();
         title = 'JavaScript Gerado';
     }
     
@@ -2608,6 +2549,7 @@ async function clearDesigner(confirm = true) {
         selectComponent(null);
         populateGlobalInspector();
         saveState();
+        renderComponentTree();
         logToConsole('Designer limpo', 'success');
         document.body.focus()
         closeAddVariableModal(); // Garante que o modal seja fechado
@@ -2636,7 +2578,7 @@ async function clearAll(confirm = true) {
         componentEvents = {};
         globalEvents = {};
         globalProjectSettings = { backgroundColor: '#ffffff', overflow: 'visible' }; // Redefinido para o padrão
-        
+
         // Aplicar redefinição na UI
         if (canvas) {
             canvas.style.backgroundColor = globalProjectSettings.backgroundColor;
@@ -2646,6 +2588,7 @@ async function clearAll(confirm = true) {
         // Atualizar UIs
         renderVariableList();
         populateGlobalInspector(); // Isso irá ler os valores redefinidos de globalProjectSettings
+        renderComponentTree();
         logToConsole('Projeto limpo e estado reiniciado.', 'success');
         
         // Salvar o estado limpo para o histórico de undo
@@ -2660,8 +2603,15 @@ function clearConsole() {
 
 // Sistema de undo/redo
 function saveState() {
-    const canvas = document.getElementById('designer-canvas');
-    const state = canvas.innerHTML;
+    const state = {
+        componentsHTML: document.getElementById('designer-canvas').innerHTML,
+        projectVariables: JSON.parse(JSON.stringify(projectVariables)),
+        componentEvents: JSON.parse(JSON.stringify(componentEvents)),
+        globalEvents: JSON.parse(JSON.stringify(globalEvents)),
+        globalProjectSettings: JSON.parse(JSON.stringify(globalProjectSettings)),
+        componentCounter: componentCounter
+    };
+    
     undoStack.push(state);
     
     // Limitar tamanho do stack
@@ -2673,18 +2623,33 @@ function saveState() {
     redoStack = [];
 }
 
+function restoreState(state) {
+    const canvas = document.getElementById('designer-canvas');
+    canvas.innerHTML = state.componentsHTML;
+
+    projectVariables = state.projectVariables;
+    componentEvents = state.componentEvents;
+    globalEvents = state.globalEvents;
+    globalProjectSettings = state.globalProjectSettings;
+    componentCounter = state.componentCounter;
+
+    // Reaplicar configurações globais na UI
+    canvas.style.backgroundColor = globalProjectSettings.backgroundColor || '#ffffff';
+    canvas.style.overflow = globalProjectSettings.overflow || 'visible';
+    
+    // Reconfigurar eventos e atualizar UI
+    setupComponentEventsAfterRestore();
+    renderVariableList();
+    selectComponent(null); // Deseleciona qualquer componente e atualiza o inspetor para o estado global
+}
+
 function undo() {
     if (undoStack.length > 1) {
         const currentState = undoStack.pop();
         redoStack.push(currentState);
         
         const previousState = undoStack[undoStack.length - 1];
-        const canvas = document.getElementById('designer-canvas');
-        canvas.innerHTML = previousState;
-        
-        // Reconfigurar eventos
-        setupComponentEventsAfterRestore();
-        selectComponent(null);
+        restoreState(previousState);
         
         logToConsole('Ação desfeita', 'info');
     }
@@ -2695,12 +2660,7 @@ function redo() {
         const state = redoStack.pop();
         undoStack.push(state);
         
-        const canvas = document.getElementById('designer-canvas');
-        canvas.innerHTML = state;
-        
-        // Reconfigurar eventos
-        setupComponentEventsAfterRestore();
-        selectComponent(null);
+        restoreState(state);
         
         logToConsole('Ação refeita', 'info');
     }
@@ -2920,8 +2880,46 @@ function createResizer(panel1, panel2, direction) {
     });
 }
 
+// Renderizar o Visor de Componentes
+function renderComponentTree() {
+    const treeContent = document.getElementById('component-tree-content');
+    if (!treeContent) return;
+
+    treeContent.innerHTML = '';
+    const components = document.querySelectorAll('.designer-component');
+
+    if (components.length === 0) {
+        treeContent.innerHTML = '<p style="color: #9d9d9d; font-size: 12px; text-align: center; padding: 10px;">Nenhum componente no projeto.</p>';
+        return;
+    }
+
+    components.forEach(component => {
+        const componentId = component.dataset.componentId;
+        const componentType = component.dataset.componentType;
+        const item = document.createElement('div');
+        item.className = 'component-tree-item';
+        item.textContent = `${componentId} (${componentType})`;
+        item.dataset.componentId = componentId;
+
+        if (selectedComponent === component) {
+            item.classList.add('selected');
+        }
+
+        item.addEventListener('click', () => {
+            const targetComponent = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
+            if (targetComponent) {
+                selectComponent(targetComponent);
+                targetComponent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
+        treeContent.appendChild(item);
+    });
+}
+
 // Atualizar interface
 function updateUI() {
+    renderComponentTree();
     // Atualizar estado dos botões e interface
 }
 
@@ -2958,7 +2956,6 @@ function collectProjectData() {
         globalSettings: globalProjectSettings,
         components: [],
         events: componentEvents || {},
-        globalEvents: globalEvents || {},
         variables: projectVariables || {}
     };
     
@@ -3261,6 +3258,7 @@ function removeAction(index) {
                 removeButton.dataset.index = newIndex;
             }
         });
+        saveState();
     }
 }
 
@@ -3372,6 +3370,7 @@ function saveAction() {
     if (document.getElementById('action-value-height')) {
         document.getElementById('action-value-height').value = '';
     }
+    saveState();
 }
 
 // Variável global para armazenar o evento atualmente sendo editado
@@ -3379,43 +3378,71 @@ let currentEditingEvent = null;
 let editingActionIndex = null; // <<< Nova variável
 
 // Salvar eventos do componente
-function saveComponentEvents(componentId) {
-    const modal = document.getElementById('event-editor-modal');
-    if (!modal) return;
-    
-    // Salvar o evento atualmente sendo editado
+async function saveComponentEvents(componentId) {
     if (currentEditingEvent) {
         saveCurrentEventActions(componentId, currentEditingEvent);
     }
-    
-    // Fechar modal
-    closeEventEditorModal();
-    
-    // Log
+
+    const allErrors = [];
     const events = componentEvents[componentId] || {};
+    for (const eventName in events) {
+        for (const action of events[eventName]) {
+            const result = validateActionReferences(action.value);
+            if (!result.isValid) {
+                allErrors.push(...result.errors.map(e => `No evento "${eventName}": ${e}`));
+            }
+        }
+    }
+
+    if (allErrors.length > 0) {
+        const errorList = allErrors.join('\n - ');
+        const confirmed = await showCustomConfirm(
+            'Aviso de Referência Inválida',
+            `Foram encontradas referências inválidas nas ações configuradas:\n - ${errorList}\n\nIsso pode causar erros na execução do projeto. Deseja salvar mesmo assim?`
+        );
+        if (!confirmed) {
+            // Restaura o estado para antes de abrir o modal
+            if(eventsBackup) closeEventEditorModal(false); 
+            return;
+        }
+    }
+    
     const eventCount = Object.keys(events).length;
     logToConsole(`Eventos salvos para ${componentId}: ${eventCount} evento(s) configurado(s)`, 'success');
     
-    // Atualizar contador no inspetor se o componente ainda estiver selecionado
     if (selectedComponent && selectedComponent.dataset.componentId === componentId) {
         populateObjectInspector(selectedComponent);
     }
 }
 
 // Salvar eventos globais
-function saveGlobalEvents() {
-    const modal = document.getElementById('event-editor-modal');
-    if (!modal) return;
-
-    // Salvar o evento global atualmente sendo editado
+async function saveGlobalEvents() {
     if (currentEditingEvent) {
         saveCurrentGlobalEventActions(currentEditingEvent);
     }
 
-    // Fechar modal
-    closeEventEditorModal();
+    const allErrors = [];
+    for (const eventName in globalEvents) {
+        for (const action of globalEvents[eventName]) {
+            const result = validateActionReferences(action.value);
+            if (!result.isValid) {
+                allErrors.push(...result.errors.map(e => `No evento "${eventName}": ${e}`));
+            }
+        }
+    }
 
-    // Log
+    if (allErrors.length > 0) {
+        const errorList = allErrors.join('\n - ');
+        const confirmed = await showCustomConfirm(
+            'Aviso de Referência Inválida',
+            `Foram encontradas referências inválidas nas ações configuradas:\n - ${errorList}\n\nIsso pode causar erros na execução do projeto. Deseja salvar mesmo assim?`
+        );
+        if (!confirmed) {
+            if(eventsBackup) closeEventEditorModal(false);
+            return;
+        }
+    }
+
     const eventCount = Object.keys(globalEvents).length;
     logToConsole(`Eventos globais salvos: ${eventCount} evento(s) configurado(s)`, 'success');
 }
@@ -3467,12 +3494,7 @@ function saveCurrentGlobalEventActions(eventName) {
 
     // Salvar ou remover evento global baseado nas ações
     if (actions.length > 0) {
-        const eventData = { actions: actions };
-        if (eventName === 'loop') {
-            const intervalInput = document.getElementById('loop-interval');
-            eventData.interval = intervalInput ? parseInt(intervalInput.value) || 1000 : 1000;
-        }
-        globalEvents[eventName] = eventData;
+        globalEvents[eventName] = actions;
     } else {
         delete globalEvents[eventName];
     }
@@ -3480,10 +3502,43 @@ function saveCurrentGlobalEventActions(eventName) {
 
 // Extrair dados da ação de um elemento DOM (removido, agora os dados são lidos diretamente do dataset)
 
-// Atualizar função de extrair eventos do componente
-function extractComponentEvents(component) {
-    const componentId = component.dataset.componentId;
-    return componentEvents[componentId] || {};
+// Função para validar referências em uma string de ação
+function validateActionReferences(value) {
+    if (typeof value !== 'string') {
+        return { isValid: true, errors: [] };
+    }
+
+    const referenceRegex = /<([a-zA-Z0-9_.]+)>/g;
+    const matches = [...value.matchAll(referenceRegex)];
+    const errors = [];
+
+    if (matches.length === 0) {
+        return { isValid: true, errors: [] };
+    }
+
+    for (const match of matches) {
+        const ref = match[1];
+        if (ref.includes('.')) {
+            const [id, prop] = ref.split('.');
+            const component = document.querySelector(`.designer-component[data-component-id="${id}"]`);
+            if (!component) {
+                errors.push(`Componente com ID "${id}" não encontrado.`);
+            } else {
+                const componentType = component.dataset.componentType;
+                const componentDef = componentLibrary.find(c => c.type === componentType);
+                if (!componentDef || !componentDef.defaultProps.hasOwnProperty(prop)) {
+                    // Simples checagem, pode ser melhorada para incluir props dinâmicas
+                    // console.warn(`Propriedade "${prop}" pode não ser válida para o componente "${id}".`);
+                }
+            }
+        } else {
+            if (!projectVariables.hasOwnProperty(ref)) {
+                errors.push(`Variável de projeto "${ref}" não encontrada.`);
+            }
+        }
+    }
+
+    return { isValid: errors.length === 0, errors };
 }
 
 // Gerar JavaScript com eventos configurados
@@ -3699,36 +3754,18 @@ function logToConsoleInPreview(message, type = 'info') {
     
     // Funções de Eventos Globais
     Object.keys(globalEvents).forEach(eventName => {
-        const eventData = globalEvents[eventName];
-        const actions = eventData.actions || eventData; // Compatibilidade com o formato antigo
-        const interval = eventData.interval || 1000;
-
-        if (eventName === 'loop') {
-            js += `
-// Evento Global: ${eventName}
-function global_loop() {
-    console.log('Loop executando...');
-`;
-            actions.forEach(action => {
-                js += generateActionCode(action);
-            });
-            js += `}
-setInterval(global_loop, ${interval});
-
-`;
-        } else {
-            js += `
+        const actions = globalEvents[eventName];
+        js += `
 // Evento Global: ${eventName}
 function global_${eventName}(event) {
     console.log('Evento global ${eventName} disparado');
 `;
-            actions.forEach(action => {
-                js += generateActionCode(action);
-            });
-            js += `}
+        actions.forEach(action => {
+            js += generateActionCode(action);
+        });
+        js += `}
 
 `;
-        }
     });
 
     components.forEach(component => {
@@ -3777,9 +3814,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Eventos Globais
     Object.keys(globalEvents).forEach(eventName => {
-        if (eventName !== 'loop') {
-            js += `    window.addEventListener('${eventName}', global_${eventName});\n`;
-        }
+        js += `    window.addEventListener('${eventName}', global_${eventName});\n`;
     });
     
     js += '});';
@@ -3888,9 +3923,6 @@ function generateActionCode(action) {
     } else {
         // Ação em elemento específico
         switch (action.actionType) {
-            case 'change_button_text':
-                code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
-                break;
             case 'change_text':
                 code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
                 break;
