@@ -111,13 +111,39 @@ body {
 /* Painel esquerdo - Paleta de Componentes */
 #left-panel {
     flex: 1;
-    min-height: 200px; /* Altura mínima para o painel de componentes */
+    min-height: 150px;
 }
+
+/* Visor de Componentes */
+#component-tree-panel {
+    flex: 1;
+    min-height: 150px;
+    border-top: 1px solid #3e3e42;
+}
+
+#component-tree-content .component-tree-item {
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 4px;
+    transition: background-color 0.2s;
+}
+
+#component-tree-content .component-tree-item:hover {
+    background-color: #3c3c3c;
+}
+
+#component-tree-content .component-tree-item.selected {
+    background-color: #0e639c;
+    color: white;
+}
+
 
 /* Painel de Variáveis */
 #variables-panel {
     flex-shrink: 0;
-    height: 250px; /* Altura fixa para o painel de variáveis */
+    height: 200px; /* Altura ajustada */
     border-top: 1px solid #3e3e42;
 }
 
@@ -1240,27 +1266,4 @@ button[style*="font-size: 12px"]:hover {
     text-transform: uppercase;
     font-weight: 500;
     color: white;
-}
-
-.suggestion-box {
-    position: absolute;
-    border: 1px solid #5a5a5a;
-    background-color: #3c3c3c;
-    color: #d4d4d4;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    z-index: 10001;
-    display: none;
-    max-height: 150px;
-    overflow-y: auto;
-}
-
-.suggestion-item {
-    padding: 8px 12px;
-    cursor: pointer;
-    font-size: 12px;
-}
-
-.suggestion-item:hover {
-    background-color: #4a4a4a;
 }
