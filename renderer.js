@@ -17,6 +17,23 @@ let globalProjectSettings = {
 };
 let globalEvents = {};
 
+// Estado do canvas do designer
+let canvasScale = 1;
+let canvasPanX = 0;
+let canvasPanY = 0;
+let isPanning = false;
+let isSpacePressed = false;
+let lastMousePos = { x: 0, y: 0 };
+
+// Função para aplicar a transformação ao canvas
+function updateCanvasTransform() {
+    const canvas = document.getElementById('designer-canvas');
+    if (canvas) {
+        canvas.style.transform = `translate(${canvasPanX}px, ${canvasPanY}px) scale(${canvasScale})`;
+        canvas.style.transformOrigin = '0 0';
+    }
+}
+
 // Componentes disponíveis na paleta
 const componentLibrary = [
     {
@@ -301,6 +318,25 @@ function setupEventListeners() {
     
     // Atalhos de teclado
     document.addEventListener('keydown', handleKeyboard);
+    document.addEventListener('keyup', (e) => {
+        if (e.code === 'Space') {
+            isSpacePressed = false;
+            if (!isPanning) {
+                const visualDesigner = document.getElementById('visual-designer');
+                if (visualDesigner) visualDesigner.style.cursor = 'default';
+            }
+        }
+    });
+
+    // Panning and Zooming listeners
+    const visualDesigner = document.getElementById('visual-designer');
+    if (visualDesigner) {
+        visualDesigner.addEventListener('wheel', handleWheelZoom, { passive: false });
+        visualDesigner.addEventListener('mousedown', handlePanStart);
+    }
+    // Listen on window to catch mouseup/mousemove even if cursor leaves the designer area
+    window.addEventListener('mousemove', handlePanMove);
+    window.addEventListener('mouseup', handlePanEnd);
 }
 
 // Popular a paleta de componentes
@@ -376,14 +412,21 @@ function handleDrop(e) {
     
     const componentType = e.dataTransfer.getData('text/plain');
     if (!componentType) return;
+
+    const visualDesigner = document.getElementById('visual-designer');
+    if (!visualDesigner) return;
     
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, e.clientX - rect.left);
-    const y = Math.max(0, e.clientY - rect.top);
+    const designerRect = visualDesigner.getBoundingClientRect();
+    const viewportX = e.clientX - designerRect.left;
+    const viewportY = e.clientY - designerRect.top;
+
+    // Transform viewport coordinates to canvas coordinates
+    const x = (viewportX - canvasPanX) / canvasScale;
+    const y = (viewportY - canvasPanY) / canvasScale;
     
     // Criar componente imediatamente
     setTimeout(() => {
-        createComponent(componentType, x, y);
+        createComponent(componentType, Math.max(0, x), Math.max(0, y));
     }, 10);
 }
 
@@ -511,8 +554,8 @@ function setupComponentEvents(wrapper) {
             }
             
             if (isDraggingComponent) {
-                const newX = Math.max(0, componentStartPos.x + deltaX);
-                const newY = Math.max(0, componentStartPos.y + deltaY);
+                const newX = Math.max(0, componentStartPos.x + (deltaX / canvasScale));
+                const newY = Math.max(0, componentStartPos.y + (deltaY / canvasScale));
                 
                 wrapper.style.left = newX + 'px';
                 wrapper.style.top = newY + 'px';
@@ -2387,7 +2430,7 @@ function runProject() {
     const { backgroundColor, overflow } = globalProjectSettings;
     
     // Criar janela de preview
-    const previewWindow = window.open('', '_blank', 'width=800,height=600');
+    const previewWindow = window.open('', '_blank', `width=${screen.width},height=${screen.height}`);
     previewWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -2395,7 +2438,7 @@ function runProject() {
             <title>Preview - KreatorJS</title>
             <style>
                 body { 
-                    margin: 20px; 
+                    margin: 0; 
                     font-family: Arial, sans-serif; 
                     background-color: ${backgroundColor};
                     overflow: ${overflow || 'visible'};
@@ -2673,6 +2716,13 @@ function setupComponentEventsAfterRestore() {
 
 // Manipulação de teclado
 function handleKeyboard(e) {
+    if (e.code === 'Space' && !isPanning && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        isSpacePressed = true;
+        const visualDesigner = document.getElementById('visual-designer');
+        if (visualDesigner) visualDesigner.style.cursor = 'grab';
+    }
+
     if (e.ctrlKey || e.metaKey) {
         switch (e.key) {
             case 'z':
@@ -4088,6 +4138,76 @@ function showPropertySelectorModal(callback) {
 // Atualizar função de geração de JavaScript
 function generateJavaScript() {
     return generateJavaScriptWithEvents();
+}
+
+// Manipuladores de Pan e Zoom
+function handleWheelZoom(e) {
+    e.preventDefault();
+    const visualDesigner = document.getElementById('visual-designer');
+    if (!visualDesigner) return;
+
+    const rect = visualDesigner.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    const zoomFactor = 1.1;
+    const oldScale = canvasScale;
+
+    if (e.deltaY < 0) {
+        canvasScale *= zoomFactor; // Zoom in
+    } else {
+        canvasScale /= zoomFactor; // Zoom out
+    }
+
+    // Clamp scale to a reasonable range
+    canvasScale = Math.max(0.1, Math.min(canvasScale, 5));
+    
+    // Adjust pan to zoom towards the mouse pointer
+    canvasPanX = mouseX - (mouseX - canvasPanX) * (canvasScale / oldScale);
+    canvasPanY = mouseY - (mouseY - canvasPanY) * (canvasScale / oldScale);
+
+    updateCanvasTransform();
+}
+
+function handlePanStart(e) {
+    // Pan with middle mouse button OR space + left click
+    const visualDesigner = document.getElementById('visual-designer');
+    // Only pan if the click is on the designer background, not on a component
+    if (e.target === visualDesigner || e.target.classList.contains('designer-canvas')) {
+        if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
+            e.preventDefault();
+            isPanning = true;
+            lastMousePos = { x: e.clientX, y: e.clientY };
+            if (visualDesigner) {
+                visualDesigner.style.cursor = 'grabbing';
+            }
+        }
+    }
+}
+
+function handlePanMove(e) {
+    if (isPanning) {
+        e.preventDefault();
+        const deltaX = e.clientX - lastMousePos.x;
+        const deltaY = e.clientY - lastMousePos.y;
+
+        canvasPanX += deltaX;
+        canvasPanY += deltaY;
+
+        lastMousePos = { x: e.clientX, y: e.clientY };
+        updateCanvasTransform();
+    }
+}
+
+function handlePanEnd(e) {
+    if (isPanning) {
+        e.preventDefault();
+        isPanning = false;
+        const visualDesigner = document.getElementById('visual-designer');
+        if (visualDesigner) {
+            visualDesigner.style.cursor = isSpacePressed ? 'grab' : 'default';
+        }
+    }
 }
 
 

@@ -222,14 +222,34 @@ body {
 
 .designer-area {
     flex: 1;
-    overflow: auto;
+    overflow: hidden; /* Changed from auto to hidden */
     position: relative;
+    cursor: grab; /* Add grab cursor for panning */
 }
 
 .designer-canvas {
     min-height: 100%;
+    width: 5000px; /* Large size for panning */
+    height: 5000px; /* Large size for panning */
     background-color: #ffffff;
     position: relative;
+    transform-origin: 0 0; /* Set transform origin for scaling */
+}
+
+#app-boundary {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 800px; /* Default preview width */
+    height: 600px; /* Default preview height */
+    border: 1px dashed rgba(255, 82, 82, 0.7);
+    background-color: rgba(255, 82, 82, 0.05);
+    pointer-events: none; /* Make sure it doesn't interfere with mouse events */
+    z-index: 1; /* Below components */
+}
+
+.designer-component {
+    z-index: 2; /* Make sure components are on top of the boundary */
 }
 
 .designer-canvas.show-grid {
