@@ -198,6 +198,7 @@ body {
 /* Painel central - Designer Visual */
 #center-panel {
     flex: 1;
+    min-width: 0;
 }
 
 .designer-controls {

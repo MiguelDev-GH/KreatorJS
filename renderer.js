@@ -1187,7 +1187,8 @@ const eventSystem = {
         ],
         global: [
             { name: 'load', label: 'Ao Carregar a Página', description: 'Quando a página termina de carregar' },
-            { name: 'unload', label: 'Ao Fechar a Página', description: 'Quando o usuário fecha a página' }
+            { name: 'unload', label: 'Ao Fechar a Página', description: 'Quando o usuário fecha a página' },
+            { name: 'loop', label: 'Loop (Temporizador)', description: 'Executa ações repetidamente em um intervalo de tempo' }
         ]
     },
     
@@ -1570,10 +1571,31 @@ function loadActionsEditor(eventName, componentType, componentId) {
     const actionsEditor = document.getElementById('actions-editor');
     const isGlobal = componentType === 'global';
     
-    // Obter ações já configuradas para este evento
-    const currentActions = isGlobal ? (globalEvents[eventName] || []) : getCurrentEventActions(componentId, eventName);
+    let currentActions = [];
+    let loopInterval = 1000; // Default interval
+
+    if (isGlobal) {
+        if (eventName === 'loop') {
+            const loopConfig = globalEvents[eventName] || { interval: 1000, actions: [] };
+            currentActions = loopConfig.actions || [];
+            loopInterval = loopConfig.interval || 1000;
+        } else {
+            currentActions = globalEvents[eventName] || [];
+        }
+    } else {
+        currentActions = getCurrentEventActions(componentId, eventName);
+    }
+
+    const loopIntervalHTML = isGlobal && eventName === 'loop' ? `
+        <div class="property-item" style="margin-bottom: 20px; padding: 10px; background: #f0f0f0; border-radius: 4px;">
+            <label class="property-label" style="font-weight: bold; color: #333;">Intervalo do Loop (ms):</label>
+            <input type="number" id="loop-interval" class="property-input" value="${loopInterval}" style="background: white; border-color: #ccc;">
+            <small style="color: #666;">Define o tempo em milissegundos entre cada execução das ações.</small>
+        </div>
+    ` : '';
     
     actionsEditor.innerHTML = `
+        ${loopIntervalHTML}
         <div style="margin-bottom: 20px;">
             <h4 style="margin: 0 0 10px 0; color: #333;">Ações para este evento:</h4>
             <div id="actions-list">
@@ -3542,11 +3564,24 @@ function saveCurrentGlobalEventActions(eventName) {
         actions.push(actionData);
     });
 
-    // Salvar ou remover evento global baseado nas ações
-    if (actions.length > 0) {
-        globalEvents[eventName] = actions;
+    if (eventName === 'loop') {
+        if (actions.length > 0) {
+            const intervalInput = document.getElementById('loop-interval');
+            const interval = intervalInput ? parseInt(intervalInput.value, 10) : 1000;
+            globalEvents.loop = {
+                interval: isNaN(interval) ? 1000 : interval,
+                actions: actions
+            };
+        } else {
+            delete globalEvents.loop;
+        }
     } else {
-        delete globalEvents[eventName];
+        // Salvar ou remover evento global baseado nas ações
+        if (actions.length > 0) {
+            globalEvents[eventName] = actions;
+        } else {
+            delete globalEvents[eventName];
+        }
     }
 }
 
@@ -3804,6 +3839,8 @@ function logToConsoleInPreview(message, type = 'info') {
     
     // Funções de Eventos Globais
     Object.keys(globalEvents).forEach(eventName => {
+        if (eventName === 'loop') return; // Skip loop event, it's handled separately
+
         const actions = globalEvents[eventName];
         js += `
 // Evento Global: ${eventName}
@@ -3864,8 +3901,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Eventos Globais
     Object.keys(globalEvents).forEach(eventName => {
+        if (eventName === 'loop') return; // Already handled
         js += `    window.addEventListener('${eventName}', global_${eventName});\n`;
     });
+
+    // Loop Global
+    if (globalEvents.loop && globalEvents.loop.actions && globalEvents.loop.actions.length > 0) {
+        js += `
+    const loopActions = () => {
+${globalEvents.loop.actions.map(action => generateActionCode(action)).join('')}
+    };
+    setInterval(loopActions, ${globalEvents.loop.interval || 1000});
+`;
+    }
     
     js += '});';
     
