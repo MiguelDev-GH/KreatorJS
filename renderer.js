@@ -1207,6 +1207,7 @@ const eventSystem = {
         
         // Ações para elementos visuais (div, image, button)
         visual: [
+            { id: 'change_text', name: 'Alterar texto', description: 'Mudar o texto do elemento' },
             { id: 'change_background', name: 'Alterar fundo', description: 'Mudar cor de fundo' },
             { id: 'change_border', name: 'Alterar borda', description: 'Mudar estilo da borda' },
             { id: 'change_size', name: 'Alterar tamanho', description: 'Mudar largura e altura' },
@@ -2365,6 +2366,7 @@ function loadProjectFromData(projectData) {
     
     // Carregar eventos
     componentEvents = projectData.events || {};
+    globalEvents = projectData.globalEvents || {};
 
     // Carregar variáveis
     projectVariables = projectData.variables || {};
@@ -2376,42 +2378,42 @@ function loadProjectFromData(projectData) {
 
 async function saveProject() {
     try {
-        let filePath = currentProject?.path;
-        
-        // Coletar dados do projeto
+        const existingPath = currentProject?.path;
         const projectData = collectProjectData();
         const jsonContent = JSON.stringify(projectData, null, 2);
-        
-        // Se não há projeto atual ou não tem caminho, abrir dialog
-        if (!filePath) {
-            if (ipcRenderer) {
-                // Versão Electron
+
+        // "Save" logic (for existing projects in Electron)
+        if (existingPath && isElectron) {
+            const saveResult = await ipcRenderer.invoke("save-file", existingPath, jsonContent);
+            if (saveResult.success) {
+                currentProject.data = projectData; // Just update the data object
+                logToConsole(`Projeto salvo: ${existingPath}`, "success");
+            } else {
+                logToConsole(`Erro ao salvar projeto: ${saveResult.error}`, "error");
+                showCustomAlert('Erro ao Salvar', `Não foi possível salvar o arquivo: ${saveResult.error}`);
+            }
+        } else {
+            // "Save As" logic (for new projects or web version)
+            if (isElectron) {
                 const result = await ipcRenderer.invoke("show-save-dialog", {
-                    defaultPath: "projeto.kjs",
-                    filters: [
-                        { name: "Projetos KreatorJS", extensions: ["kjs"] },
-                        { name: "Todos os arquivos", extensions: ["*"] }
-                    ]
+                    defaultPath: "meu-projeto.kjs",
+                    filters: [{ name: "Projetos KreatorJS", extensions: ["kjs"] }],
                 });
-                
+
                 if (result.canceled) return;
-                filePath = result.filePath;
                 
-                // Salvar arquivo
-                const saveResult = await ipcRenderer.invoke("save-file", filePath, jsonContent);
-                
+                const newPath = result.filePath;
+                const saveResult = await ipcRenderer.invoke("save-file", newPath, jsonContent);
+
                 if (saveResult.success) {
-                    currentProject = {
-                        path: filePath,
-                        data: projectData
-                    };
-                    
-                    logToConsole(`Projeto salvo: ${filePath}`, "success");
+                    currentProject = { path: newPath, data: projectData };
+                    logToConsole(`Projeto salvo em: ${newPath}`, "success");
                 } else {
-                    logToConsole(`Erro ao salvar projeto: ${saveResult.error}`, "error");
+                    logToConsole(`Erro ao salvar novo projeto: ${saveResult.error}`, "error");
+                    showCustomAlert('Erro ao Salvar', `Não foi possível salvar o arquivo: ${saveResult.error}`);
                 }
             } else {
-                // Versão navegador - download do arquivo
+                // Web version: always downloads the file
                 const blob = new Blob([jsonContent], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -2421,27 +2423,12 @@ async function saveProject() {
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                
                 logToConsole("Projeto baixado como projeto.kjs", "success");
             }
-        } else if (ipcRenderer) {
-            // Salvar no caminho existente (apenas Electron)
-            const saveResult = await ipcRenderer.invoke("save-file", filePath, jsonContent);
-            
-            if (saveResult.success) {
-                currentProject = {
-                    path: filePath,
-                    data: projectData
-                };
-                
-                logToConsole(`Projeto salvo: ${filePath}`, "success");
-            } else {
-                logToConsole(`Erro ao salvar projeto: ${saveResult.error}`, "error");
-            }
         }
-        
     } catch (error) {
-        logToConsole(`Erro ao salvar projeto: ${error.message}`, "error");
+        logToConsole(`Erro inesperado ao salvar projeto: ${error.message}`, "error");
+        showCustomAlert('Erro Inesperado', `Ocorreu um erro ao salvar: ${error.message}`);
     }
 }
 
@@ -3028,6 +3015,7 @@ function collectProjectData() {
         globalSettings: globalProjectSettings,
         components: [],
         events: componentEvents || {},
+        globalEvents: globalEvents || {},
         variables: projectVariables || {}
     };
     
