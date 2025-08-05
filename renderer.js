@@ -2129,7 +2129,7 @@ const projectTemplates = [
         globalSettings: {
             width: 800,
             height: 600,
-            backgroundColor: '#f5f5f5'
+            backgroundColor: '#000000ff'
         },
         components: [
             {
