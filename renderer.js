@@ -13,6 +13,8 @@ let undoStack = [];
 let redoStack = [];
 let projectVariables = {};
 let globalProjectSettings = {
+    width: 800,
+    height: 600,
     backgroundColor: '#ffffff'
 };
 let globalEvents = {};
@@ -1117,12 +1119,25 @@ function updateComponentProperty(property, value) {
 // Popular o inspetor com configurações globais
 function populateGlobalInspector() {
     const inspector = document.getElementById("object-inspector");
-    const canvas = document.getElementById('designer-canvas');
-    const currentBgColor = rgbToHex(window.getComputedStyle(canvas).backgroundColor) || globalProjectSettings.backgroundColor;
+    const appBoundary = document.getElementById('app-boundary');
+
+    // Ensure we have default values if they are missing from the project settings
+    const currentWidth = globalProjectSettings.width || 800;
+    const currentHeight = globalProjectSettings.height || 600;
+    const currentBgColor = globalProjectSettings.backgroundColor || '#ffffff';
+    const currentOverflow = globalProjectSettings.overflow || 'visible';
 
     inspector.innerHTML = `
         <div class="property-group">
-            <div class="property-group-title">Configurações Globais</div>
+            <div class="property-group-title">Configurações da Aplicação</div>
+             <div class="property-item">
+                <label class="property-label">Largura da Tela (px)</label>
+                <input type="number" class="property-input" id="global-width" value="${currentWidth}" min="100">
+            </div>
+            <div class="property-item">
+                <label class="property-label">Altura da Tela (px)</label>
+                <input type="number" class="property-input" id="global-height" value="${currentHeight}" min="100">
+            </div>
             <div class="property-item">
                 <label class="property-label">Cor de Fundo</label>
                 <input type="color" class="property-input" id="global-bg-color" value="${currentBgColor}">
@@ -1130,10 +1145,10 @@ function populateGlobalInspector() {
             <div class="property-item">
                 <label class="property-label">Overflow</label>
                 <select class="property-input" id="global-overflow">
-                    <option value="visible" ${globalProjectSettings.overflow === 'visible' ? 'selected' : ''}>Visível</option>
-                    <option value="hidden" ${globalProjectSettings.overflow === 'hidden' ? 'selected' : ''}>Oculto</option>
-                    <option value="scroll" ${globalProjectSettings.overflow === 'scroll' ? 'selected' : ''}>Scroll</option>
-                    <option value="auto" ${globalProjectSettings.overflow === 'auto' ? 'selected' : ''}>Automático</option>
+                    <option value="visible" ${currentOverflow === 'visible' ? 'selected' : ''}>Visível</option>
+                    <option value="hidden" ${currentOverflow === 'hidden' ? 'selected' : ''}>Oculto</option>
+                    <option value="scroll" ${currentOverflow === 'scroll' ? 'selected' : ''}>Scroll</option>
+                    <option value="auto" ${currentOverflow === 'auto' ? 'selected' : ''}>Automático</option>
                 </select>
             </div>
         </div>
@@ -1142,27 +1157,50 @@ function populateGlobalInspector() {
             <button class="btn" onclick="showEventEditorModal(null, 'global', 'global')">Editar Eventos Globais</button>
         </div>
     `;
+    
+    const applyAppSettings = () => {
+        if (appBoundary) {
+            appBoundary.style.width = `${globalProjectSettings.width}px`;
+            appBoundary.style.height = `${globalProjectSettings.height}px`;
+            appBoundary.style.backgroundColor = globalProjectSettings.backgroundColor;
+            appBoundary.style.overflow = globalProjectSettings.overflow;
+        }
+    };
 
-    // Listener para a cor de fundo
-    const bgColorInput = document.getElementById('global-bg-color');
-    if (bgColorInput) {
-        bgColorInput.addEventListener('input', (e) => {
-            globalProjectSettings.backgroundColor = e.target.value;
-            if (canvas) {
-                canvas.style.backgroundColor = e.target.value;
-            }
+    applyAppSettings();
+
+    const widthInput = document.getElementById('global-width');
+    if (widthInput) {
+        widthInput.addEventListener('input', (e) => {
+            globalProjectSettings.width = parseInt(e.target.value) || 800;
+            applyAppSettings();
             saveState();
         });
     }
 
-    // Listener para o overflow
+    const heightInput = document.getElementById('global-height');
+    if (heightInput) {
+        heightInput.addEventListener('input', (e) => {
+            globalProjectSettings.height = parseInt(e.target.value) || 600;
+            applyAppSettings();
+            saveState();
+        });
+    }
+
+    const bgColorInput = document.getElementById('global-bg-color');
+    if (bgColorInput) {
+        bgColorInput.addEventListener('input', (e) => {
+            globalProjectSettings.backgroundColor = e.target.value;
+            applyAppSettings();
+            saveState();
+        });
+    }
+
     const overflowInput = document.getElementById('global-overflow');
     if (overflowInput) {
         overflowInput.addEventListener('input', (e) => {
             globalProjectSettings.overflow = e.target.value;
-            if (canvas) {
-                canvas.style.overflow = e.target.value;
-            }
+            applyAppSettings();
             saveState();
         });
     }
@@ -2009,12 +2047,22 @@ const projectTemplates = [
         id: 'blank',
         name: 'Projeto em Branco',
         description: 'Projeto vazio para começar do zero',
+        globalSettings: {
+            width: 800,
+            height: 600,
+            backgroundColor: '#ffffff'
+        },
         components: []
     },
     {
         id: 'form',
         name: 'Formulário de Contato',
         description: 'Template com formulário básico',
+        globalSettings: {
+            width: 450,
+            height: 450,
+            backgroundColor: '#f0f0f0'
+        },
         components: [
             {
                 id: 'label_1',
@@ -2079,7 +2127,9 @@ const projectTemplates = [
         name: 'Dashboard Simples',
         description: 'Template com layout de dashboard',
         globalSettings: {
-            backgroundColor: '#000000'
+            width: 800,
+            height: 600,
+            backgroundColor: '#f5f5f5'
         },
         components: [
             {
@@ -2471,10 +2521,10 @@ function runProject() {
     // Gerar e executar o projeto
     const htmlCode = generateHTML();
     const jsCode = generateJavaScriptWithEvents();
-    const { backgroundColor, overflow } = globalProjectSettings;
+    const { width, height, backgroundColor, overflow } = globalProjectSettings;
     
     // Criar janela de preview
-    const previewWindow = window.open('', '_blank', `width=${screen.width},height=${screen.height}`);
+    const previewWindow = window.open('', '_blank', `width=${width || 800},height=${height || 600}`);
     previewWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -2664,7 +2714,7 @@ async function clearAll(confirm = true) {
         projectVariables = {};
         componentEvents = {};
         globalEvents = {};
-        globalProjectSettings = { backgroundColor: '#ffffff', overflow: 'visible' }; // Redefinido para o padrão
+        globalProjectSettings = { width: 800, height: 600, backgroundColor: '#ffffff', overflow: 'visible' }; // Redefinido para o padrão
 
         // Aplicar redefinição na UI
         if (canvas) {

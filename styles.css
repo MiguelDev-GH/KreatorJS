@@ -223,29 +223,31 @@ body {
 
 .designer-area {
     flex: 1;
-    overflow: hidden; /* Changed from auto to hidden */
+    display: flex;
+    align-items: flex-start; /* Align canvas to the top */
+    justify-content: center;
+    overflow: auto; /* Allow scrolling for large canvases */
+    padding: 20px; /* Add some padding around the canvas */
     position: relative;
-    cursor: grab; /* Add grab cursor for panning */
 }
 
 .designer-canvas {
-    min-height: 100%;
-    width: 5000px; /* Large size for panning */
-    height: 5000px; /* Large size for panning */
-    background-color: #ffffff;
     position: relative;
-    transform-origin: 0 0; /* Set transform origin for scaling */
+    transform-origin: 0 0;
+    background-color: #2c2c2e; /* Dark background for the pannable area */
+    width: fit-content; /* Fit to the app-boundary size */
+    height: fit-content; /* Fit to the app-boundary size */
+    display: flex; /* To contain the app-boundary */
+    align-items: center;
+    justify-content: center;
 }
 
 #app-boundary {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 800px; /* Default preview width */
-    height: 600px; /* Default preview height */
-    border: 1px dashed rgba(55, 55, 55, 0.7);
-    pointer-events: none; /* Make sure it doesn't interfere with mouse events */
-    z-index: 1; /* Below components */
+    position: relative; /* Positioned within the canvas */
+    border: 1px solid #444;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.4);
+    overflow: hidden; /* This should match the project's overflow setting */
+    flex-shrink: 0; /* Prevent from shrinking */
 }
 
 .designer-component {
