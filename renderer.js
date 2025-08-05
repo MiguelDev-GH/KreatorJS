@@ -967,6 +967,9 @@ function setupPropertyListeners() {
         input.addEventListener('input', (e) => {
             updateComponentProperty(e.target.dataset.property, e.target.value);
         });
+
+        // Attach the suggestion listener for text-based inputs
+        attachSuggestionListener(input);
     });
     
     // Listeners de posição
@@ -990,28 +993,60 @@ function setupPropertyListeners() {
     }
 }
 
-// Atualizar propriedade do componente
-function updateComponentProperty(property, value) {
-    if (!selectedComponent) return;
+function resolveValueInIDE(value) {
+    if (typeof value !== 'string') {
+        return value; // Return non-strings as-is
+    }
+
+    const referenceRegex = /<([a-zA-Z0-9_.]+)>/g;
     
-    const element = selectedComponent.firstElementChild;
+    // Replace each found reference with its corresponding value
+    const resolvedValue = value.replace(referenceRegex, (match, reference) => {
+        // First, check if the reference is a component property
+        if (reference.includes('.')) {
+            const [componentId, propName] = reference.split('.');
+            const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
+            if (component) {
+                const element = component.firstElementChild;
+                if (element) {
+                    // Use the existing getPropertyValue to get the live value, which handles various property types
+                    return getPropertyValue(element, propName);
+                }
+            }
+        } else {
+            // If not a component property, check if it's a project variable
+            if (projectVariables.hasOwnProperty(reference)) {
+                const variable = projectVariables[reference];
+                // For objects/arrays, stringify them. For others, return the value.
+                if (variable.type === 'object' || variable.type === 'array') {
+                    return JSON.stringify(variable.value);
+                }
+                return variable.value;
+            }
+        }
+        
+        // If the reference cannot be resolved, return the original tag to indicate an issue
+        return match;
+    });
+
+    return resolvedValue;
+}
+
+function applyPropertyToComponent(component, property, value) {
+    if (!component) return;
+    const element = component.firstElementChild;
     if (!element) return;
-    
+
+    // This is the logic moved from updateComponentProperty
     switch (property) {
         case 'text':
-            // Para checkbox, atualizar apenas o texto do label, não o checkbox em si
             if (element.tagName === 'LABEL' && element.querySelector('input[type="checkbox"]')) {
-                // Preservar o checkbox e atualizar apenas o texto
                 const checkbox = element.querySelector('input[type="checkbox"]');
                 const checkboxState = checkbox.checked;
                 element.innerHTML = `<input type="checkbox" ${checkboxState ? 'checked' : ''}> ${value}`;
-                // Reconfigurar eventos do checkbox
                 const newCheckbox = element.querySelector('input[type="checkbox"]');
                 newCheckbox.addEventListener('click', (e) => {
-                    if (!isInExecutionMode()) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                    }
+                    if (!isInExecutionMode()) e.preventDefault();
                 });
             } else if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
                 element.value = value;
@@ -1019,71 +1054,63 @@ function updateComponentProperty(property, value) {
                 element.textContent = value;
             }
             break;
-        case 'placeholder':
-            element.placeholder = value;
-            break;
-        case 'src':
-            element.src = value;
-            // Forçar atualização da imagem
-            if (element.tagName === 'IMG') {
-                element.onload = () => {
-                    logToConsole('Imagem carregada com sucesso', 'success');
-                };
-                element.onerror = () => {
-                    logToConsole('Erro ao carregar imagem', 'error');
-                };
-            }
-            break;
-        case 'alt':
-            element.alt = value;
-            break;
+        case 'placeholder': element.placeholder = value; break;
+        case 'src': element.src = value; break;
+        case 'alt': element.alt = value; break;
         case 'checked':
             if (element.type === 'checkbox' || element.querySelector('input[type="checkbox"]')) {
                 const checkbox = element.type === 'checkbox' ? element : element.querySelector('input[type="checkbox"]');
-                if (checkbox) checkbox.checked = value;
+                if (checkbox) checkbox.checked = (value === 'true' || value === true);
             }
             break;
-        // Propriedades de borda
-        case 'borderStyle':
-            element.style.borderStyle = value;
-            break;
-        case 'borderWidth':
-            element.style.borderWidth = value;
-            break;
-        case 'borderColor':
-            element.style.borderColor = value;
-            break;
-        case 'borderRadius':
-            element.style.borderRadius = value;
-            break;
+        case 'borderStyle': element.style.borderStyle = value; break;
+        case 'borderWidth': element.style.borderWidth = value; break;
+        case 'borderColor': element.style.borderColor = value; break;
+        case 'borderRadius': element.style.borderRadius = value; break;
         case 'zIndex':
             let zIndexValue = parseInt(value) || 1;
-            if (zIndexValue < 1) {
-                zIndexValue = 1;
-            }
+            if (zIndexValue < 1) zIndexValue = 1;
             element.style.zIndex = zIndexValue;
-            selectedComponent.style.zIndex = zIndexValue;
-            
-            // Atualizar o valor no input para refletir a correção
-            const zIndexInput = document.querySelector('[data-property="zIndex"]');
-            if (zIndexInput) {
-                zIndexInput.value = zIndexValue;
-            }
+            component.style.zIndex = zIndexValue;
             break;
         default:
             element.style[property] = value;
             break;
     }
-    
-    // Atualizar tamanho do wrapper se necessário
-    if (property === 'width') {
-        selectedComponent.style.width = value;
-    }
-    if (property === 'height') {
-        selectedComponent.style.height = value;
-    }
-    
-    // Salvar estado após mudança
+
+    if (property === 'width') component.style.width = value;
+    if (property === 'height') component.style.height = value;
+}
+
+function updateAllDynamicProperties() {
+    const allComponents = document.querySelectorAll('.designer-component');
+    allComponents.forEach(component => {
+        // The component.dataset object is a map of all data-* attributes.
+        for (const key in component.dataset) {
+            if (key.startsWith('rawProp')) { // e.g., rawProp-text
+                const propertyName = key.substring('rawProp'.length).toLowerCase();
+                const rawValue = component.dataset[key];
+                
+                // Always resolve and apply. This handles both initial application and updates.
+                const resolvedValue = resolveValueInIDE(rawValue);
+                applyPropertyToComponent(component, propertyName, resolvedValue);
+            }
+        }
+    });
+}
+
+// Atualizar propriedade do componente
+function updateComponentProperty(property, value) {
+    if (!selectedComponent) return;
+
+    // Step 1: Store the raw, unresolved value.
+    const propKey = `rawProp${property.charAt(0).toUpperCase() + property.slice(1)}`;
+    selectedComponent.dataset[propKey] = value;
+
+    // Step 2: Trigger a global update to resolve all dynamic properties.
+    updateAllDynamicProperties();
+
+    // Step 3: Save the state for undo/redo.
     saveState();
 }
 
@@ -1488,6 +1515,10 @@ function showManipulateVariableModal(callback) {
 
     modal.appendChild(modalContent);
     document.body.appendChild(modal);
+
+    // Attach suggestion listener to the value input
+    const valueInput = document.getElementById('modal-manip-var-value');
+    attachSuggestionListener(valueInput);
 
     const closeModal = () => {
         const modal = document.getElementById(modalId);
@@ -1927,46 +1958,7 @@ function updateActionParameters(valueToSet = null) {
 
     // Add event listener for suggestions on the main value input
     const actionValueInput = document.getElementById('action-value');
-    if (actionValueInput && actionValueInput.type === 'text') {
-        actionValueInput.addEventListener('input', (e) => {
-            const value = e.target.value;
-            const cursorPos = e.target.selectionStart;
-            const lastOpenBracket = value.lastIndexOf('<', cursorPos - 1);
-
-            if (lastOpenBracket !== -1) {
-                const textBetween = value.substring(lastOpenBracket + 1, cursorPos);
-                // Check for characters that should not be in a variable name
-                if (!/[\s>]/.test(textBetween)) {
-                    showSuggestions(e.target, textBetween);
-                } else {
-                    hideSuggestions();
-                }
-            } else {
-                hideSuggestions();
-            }
-        });
-
-        actionValueInput.addEventListener('keydown', (e) => {
-            if (suggestionsContainer) {
-                if (e.key === 'Escape') {
-                    hideSuggestions();
-                }
-                // Here you could add ArrowUp/ArrowDown/Enter to navigate suggestions
-            }
-        });
-    }
-
-    // Also add listener for the variable manipulation modal's value field
-    const manipValueInput = document.getElementById('modal-manip-var-value');
-    if (manipValueInput) {
-         manipValueInput.addEventListener('input', (e) => {
-            const value = e.target.value;
-            const cursorPos = e.target.selectionStart;
-            if (value.substring(cursorPos - 1, cursorPos) === '<') {
-                showSuggestions(e.target);
-            }
-         });
-    }
+    attachSuggestionListener(actionValueInput);
 }
 
 // Gerar código de evento
@@ -4865,6 +4857,7 @@ function addVariable() {
 
     logToConsole(`Variável "${name}" adicionada com sucesso.`, 'success');
     renderVariableList();
+    updateAllDynamicProperties(); // Update components that might use this new variable
     
     // Limpar campos para a próxima variável
     nameInput.value = '';
@@ -4909,6 +4902,7 @@ async function removeVariable(name, confirm = true) {
         delete projectVariables[name];
         logToConsole(`Variável "${name}" removida.`, 'info');
         renderVariableList();
+        updateAllDynamicProperties(); // Update components that might have used this variable
         refreshEditVariableList()
     }
 }
@@ -5228,6 +5222,7 @@ function editVariable(name) {
         projectVariables[name] = { type: newType, value: parsedValue };
         logToConsole(`Variável "${name}" atualizada com sucesso.`, 'success');
         refreshEditVariableList();
+        updateAllDynamicProperties(); // Update components that might use this variable
         closeEditSingleVariableModal();
     });
 
@@ -5243,6 +5238,60 @@ function closeEditSingleVariableModal() {
     if (modal) {
         modal.remove();
     }
+}
+
+// --- Helper function to attach suggestion listeners ---
+function attachSuggestionListener(inputElement) {
+    if (!inputElement || inputElement.tagName !== 'INPUT' || !['text', 'url'].includes(inputElement.type)) {
+        return;
+    }
+
+    const show = (filter = '') => {
+        // Use a small timeout to handle asynchronous input events gracefully
+        setTimeout(() => showSuggestions(inputElement, filter), 50);
+    };
+
+    const handleInput = (e) => {
+        const value = e.target.value;
+        const cursorPos = e.target.selectionStart;
+        const lastOpenBracket = value.lastIndexOf('<', cursorPos - 1);
+
+        if (lastOpenBracket !== -1) {
+            const textBetween = value.substring(lastOpenBracket + 1, cursorPos);
+            // Show suggestions only if the text looks like a variable name
+            if (!/[\s>]/.test(textBetween)) {
+                show(textBetween);
+            } else {
+                hideSuggestions();
+            }
+        } else {
+            hideSuggestions();
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (suggestionsContainer) {
+            if (e.key === 'Escape') {
+                hideSuggestions();
+                e.stopPropagation(); // Prevent modal from closing if any
+            }
+            // Future enhancement: Add ArrowUp, ArrowDown, Enter to navigate suggestions
+        }
+    };
+
+    const handleBlur = () => {
+        // Delay hiding to allow a click on a suggestion item
+        setTimeout(() => {
+            if (suggestionsContainer && !suggestionsContainer.matches(':hover')) {
+                hideSuggestions();
+            }
+        }, 150);
+    };
+
+    // Add all necessary listeners
+    inputElement.addEventListener('input', handleInput);
+    inputElement.addEventListener('keydown', handleKeyDown);
+    inputElement.addEventListener('blur', handleBlur);
 }
 
 // --- Suggestions Dropdown Functions ---
