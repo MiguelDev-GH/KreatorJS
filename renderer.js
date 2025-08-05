@@ -1924,6 +1924,49 @@ function updateActionParameters(valueToSet = null) {
     }
     
     parametersContainer.innerHTML = parametersHTML;
+
+    // Add event listener for suggestions on the main value input
+    const actionValueInput = document.getElementById('action-value');
+    if (actionValueInput && actionValueInput.type === 'text') {
+        actionValueInput.addEventListener('input', (e) => {
+            const value = e.target.value;
+            const cursorPos = e.target.selectionStart;
+            const lastOpenBracket = value.lastIndexOf('<', cursorPos - 1);
+
+            if (lastOpenBracket !== -1) {
+                const textBetween = value.substring(lastOpenBracket + 1, cursorPos);
+                // Check for characters that should not be in a variable name
+                if (!/[\s>]/.test(textBetween)) {
+                    showSuggestions(e.target, textBetween);
+                } else {
+                    hideSuggestions();
+                }
+            } else {
+                hideSuggestions();
+            }
+        });
+
+        actionValueInput.addEventListener('keydown', (e) => {
+            if (suggestionsContainer) {
+                if (e.key === 'Escape') {
+                    hideSuggestions();
+                }
+                // Here you could add ArrowUp/ArrowDown/Enter to navigate suggestions
+            }
+        });
+    }
+
+    // Also add listener for the variable manipulation modal's value field
+    const manipValueInput = document.getElementById('modal-manip-var-value');
+    if (manipValueInput) {
+         manipValueInput.addEventListener('input', (e) => {
+            const value = e.target.value;
+            const cursorPos = e.target.selectionStart;
+            if (value.substring(cursorPos - 1, cursorPos) === '<') {
+                showSuggestions(e.target);
+            }
+         });
+    }
 }
 
 // Gerar código de evento
@@ -5201,6 +5244,118 @@ function closeEditSingleVariableModal() {
         modal.remove();
     }
 }
+
+// --- Suggestions Dropdown Functions ---
+let suggestionsContainer = null;
+
+function hideSuggestions() {
+    if (suggestionsContainer) {
+        suggestionsContainer.remove();
+        suggestionsContainer = null;
+    }
+}
+
+function showSuggestions(inputElement, filterText = '') {
+    hideSuggestions(); // Remove any existing suggestions
+
+    const suggestions = [];
+
+    // 1. Get project variables
+    Object.keys(projectVariables).forEach(varName => {
+        const variable = projectVariables[varName];
+        let displayValue = JSON.stringify(variable.value);
+        if (displayValue.length > 25) {
+            displayValue = displayValue.substring(0, 25) + '...';
+        }
+        suggestions.push({
+            name: varName,
+            value: `(valor: ${displayValue})`,
+            insertText: `<${varName}>`
+        });
+    });
+
+    // 2. Get component properties
+    const allComponents = document.querySelectorAll('.designer-component');
+    allComponents.forEach(component => {
+        const componentId = component.dataset.componentId;
+        const componentType = component.dataset.componentType;
+        const componentDef = componentLibrary.find(c => c.type === componentType);
+        
+        if (componentDef) {
+            const props = Object.keys(componentDef.defaultProps);
+            if (['input', 'textarea', 'select'].includes(componentType)) props.push('value');
+            if (componentType === 'checkbox') props.push('checked');
+
+            props.forEach(prop => {
+                suggestions.push({
+                    name: `${componentId}.${prop}`,
+                    value: `(propriedade de ${componentType})`,
+                    insertText: `<${componentId}.${prop}>`
+                });
+            });
+        }
+    });
+
+    const filteredSuggestions = suggestions.filter(s => 
+        s.name.toLowerCase().startsWith(filterText.toLowerCase())
+    );
+
+    if (filteredSuggestions.length === 0) {
+        return; // Do not show the container if there are no suggestions
+    }
+
+    // Create container
+    suggestionsContainer = document.createElement('div');
+    suggestionsContainer.className = 'suggestions-container';
+    
+    // Create and append items
+    filteredSuggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.innerHTML = `
+            <span class="suggestion-name">${suggestion.name}</span>
+            <span class="suggestion-value">${suggestion.value}</span>
+        `;
+        item.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent input from losing focus
+            const currentVal = inputElement.value;
+            const cursorPos = inputElement.selectionStart;
+            const lastOpenBracket = currentVal.lastIndexOf('<', cursorPos - 1);
+            
+            if (lastOpenBracket !== -1) {
+                // To replace the filter text, we need to know what it was
+                const textToReplace = currentVal.substring(lastOpenBracket, cursorPos);
+                const newValue = currentVal.substring(0, lastOpenBracket) + suggestion.insertText + currentVal.substring(cursorPos);
+                inputElement.value = newValue;
+                inputElement.focus();
+                const newCursorPos = lastOpenBracket + suggestion.insertText.length;
+                inputElement.setSelectionRange(newCursorPos, newCursorPos);
+            }
+            hideSuggestions();
+        });
+        suggestionsContainer.appendChild(item);
+    });
+
+    // Position and append to body
+    document.body.appendChild(suggestionsContainer);
+    const rect = inputElement.getBoundingClientRect();
+    suggestionsContainer.style.left = `${rect.left}px`;
+    suggestionsContainer.style.top = `${rect.bottom + 2}px`;
+    suggestionsContainer.style.width = `${rect.width}px`;
+
+    // Add listener to close on outside click
+    const clickOutsideHandler = (event) => {
+        if (suggestionsContainer && !suggestionsContainer.contains(event.target) && event.target !== inputElement) {
+            hideSuggestions();
+            document.removeEventListener('mousedown', clickOutsideHandler);
+        }
+    };
+    // Use setTimeout to avoid the same click that opened the suggestions from closing it
+    setTimeout(() => {
+        document.addEventListener('mousedown', clickOutsideHandler);
+    }, 0);
+}
+
 
 // Atualizar setupVariableButtonListener para incluir o novo botão
 function setupVariableButtonListener() {

@@ -1271,11 +1271,17 @@ button[style*="font-size: 12px"]:hover {
 
 #prop-selector-component option{
     background-color: rgba(0, 0, 0, 0);
-    border: solid rgba(255, 255, 255, 0.704) 2px;
-    border-radius: 5px;
-    padding: 5px;
-    font-weight: 700;
+    border: solid rgba(255, 255, 255, 0.199) 1px;
+    border-radius: 3px;
+    font-weight: 600;
+    padding: 4px;
     color: white;
+    transition: .3s all ease;
+    margin: 5px 0;
+}
+
+#prop-selector-component option:hover{
+    background-color: #2d2d30;
 }
 
 #prop-selector-property option{
@@ -1286,4 +1292,46 @@ button[style*="font-size: 12px"]:hover {
     text-transform: uppercase;
     font-weight: 500;
     color: white;
+}
+
+/* Suggestions Dropdown */
+.suggestions-container {
+    position: absolute;
+    background-color: #3c3c3c;
+    border: 1px solid #5a5a5a;
+    border-radius: 4px;
+    z-index: 10001; /* High z-index to be on top of modals */
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    color: #d4d4d4;
+    font-size: 13px;
+    border-bottom: 1px solid #2d2d30;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover {
+    background-color: #0e639c;
+}
+
+.suggestion-item.selected {
+    background-color: #0e639c;
+}
+
+.suggestion-item .suggestion-name {
+    font-weight: bold;
+}
+
+.suggestion-item .suggestion-value {
+    color: #969696;
+    font-size: 11px;
+    margin-left: 8px;
 }
