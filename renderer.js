@@ -1348,16 +1348,18 @@ function showEventEditorModal(component, componentId, componentType) {
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: rgba(0, 0, 0, 0.7);
         display: flex;
         justify-content: center;
         align-items: center;
         z-index: 10000;
+        backdrop-filter: blur(2px);
     `;
     
     const modalContent = document.createElement('div');
     modalContent.style.cssText = `
-        background: white;
+        background-color: #252526;
+        border: 1px solid #3e3e42;
         padding: 0;
         border-radius: 8px;
         width: 90%;
@@ -1366,6 +1368,7 @@ function showEventEditorModal(component, componentId, componentType) {
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     `;
     
     // Obter eventos disponíveis para este tipo de componente
@@ -1375,33 +1378,35 @@ function showEventEditorModal(component, componentId, componentType) {
     const currentEvents = isGlobal ? globalEvents : getCurrentComponentEvents(componentId);
     
     modalContent.innerHTML = `
-        <div style="padding: 20px; border-bottom: 1px solid #ddd; background: #f8f9fa;">
-            <h2 style="margin: 0; color: #333;">Editor de Eventos - ${isGlobal ? 'Eventos Globais' : componentId}</h2>
-            <p style="margin: 5px 0 0 0; color: #666;">Configure os eventos e ações para ${isGlobal ? 'o projeto' : 'este componente'}</p>
+        <div style="padding: 20px; border-bottom: 1px solid #3e3e42; background: #333333;">
+            <h2 style="margin: 0; color: #00c3ffff;">Editor de Eventos - ${isGlobal ? 'Eventos Globais' : componentId}</h2>
+            <p style="margin: 5px 0 0 0; color: #cccccc;">Configure os eventos e ações para ${isGlobal ? 'o projeto' : 'este componente'}</p>
         </div>
         
-        <div style="flex: 1; display: flex; overflow: hidden;">
+        <div style="flex: 1; display: flex; overflow: hidden; background-color: #252526;">
             <!-- Lista de eventos -->
-            <div style="width: 300px; border-right: 1px solid #ddd; overflow-y: auto;">
-                <div style="padding: 15px; border-bottom: 1px solid #eee; background: #f8f9fa;">
-                    <h3 style="margin: 0; font-size: 14px; color: #333;">EVENTOS DISPONÍVEIS</h3>
+            <div style="width: 300px; border-right: 1px solid #3e3e42; overflow-y: auto; background-color: #2d2d30;">
+                <div style="padding: 15px; border-bottom: 1px solid #3e3e42; background: #333333;">
+                    <h3 style="margin: 0; font-size: 14px; color: #ffffff;">EVENTOS DISPONÍVEIS</h3>
                 </div>
                 <div id="events-list" style="padding: 10px;">
                     ${availableEvents.map(event => `
                         <div class="event-item" data-event-name="${event.name}" style="
                             padding: 10px;
                             margin-bottom: 8px;
-                            border: 1px solid #ddd;
+                            border: 1px solid #3e3e42;
                             border-radius: 4px;
                             cursor: pointer;
                             transition: all 0.2s;
-                            ${currentEvents[event.name] ? 'background: #e3f2fd; border-color: #2196f3;' : ''}
-                        " onmouseover="this.style.backgroundColor='lightgray'" onmouseout="this.style.backgroundColor='${currentEvents[event.name] ? '#e3f2fd' : 'white'}'">
-                            <div style="font-weight: bold; color: #333; margin-bottom: 2px;">${event.label}</div>
-                            <div style="font-size: 12px; color: #666;">${event.description}</div>
+                            background-color: #3e3e42;
+                            ${currentEvents[event.name] ? 'background: #007acc; border-color: #007acc;' : ''}
+                        " onmouseover="this.style.backgroundColor='#4f4f53'" onmouseout="this.style.backgroundColor='${currentEvents[event.name] ? '#007acc' : '#3e3e42'}'">
+                            <div style="font-weight: bold; color: #ffffff; margin-bottom: 2px;">${event.label}</div>
+                            <div style="font-size: 12px; color: #cccccc;">${event.description}</div>
                             ${currentEvents[event.name] ? `
-                                <div style="font-size: 11px; color: #2196f3; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
-                                    <span>✓ Configurado (${currentEvents[event.name].length} ação/ões)</                                    <button onclick="selectEventForEditing(\'${event.name}\', \'${componentType}\', \'${componentId}\')" style="
+                                <div style="font-size: 11px; color: #ffffff; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
+                                    <span>✓ Configurado (${currentEvents[event.name].length} ação/ões)</span>
+                                    <button onclick="selectEventForEditing('${event.name}', '${componentType}', '${componentId}')" style="
                                         background: #28a745;
                                         color: white;
                                         border: none;
@@ -1419,14 +1424,14 @@ function showEventEditorModal(component, componentId, componentType) {
             
             <!-- Editor de ações -->
             <div style="flex: 1; display: flex; flex-direction: column;">
-                <div style="padding: 15px; border-bottom: 1px solid #eee; background: #f8f9fa;">
-                    <h3 style="margin: 0; font-size: 14px; color: #333;">CONFIGURAR AÇÕES</h3>
-                    <div id="selected-event-info" style="margin-top: 5px; font-size: 12px; color: #666;">
+                <div style="padding: 15px; border-bottom: 1px solid #3e3e42; background: #333333;">
+                    <h3 style="margin: 0; font-size: 14px; color: #ffffff;">CONFIGURAR AÇÕES</h3>
+                    <div id="selected-event-info" style="margin-top: 5px; font-size: 12px; color: #cccccc;">
                         Selecione um evento à esquerda para configurar suas ações
                     </div>
                 </div>
                 
-                <div id="actions-editor" style="flex: 1; padding: 20px; overflow-y: auto;">
+                <div id="actions-editor" style="flex: 1; padding: 20px; overflow-y: auto; color: #ffffff;">
                     <div style="text-align: center; color: #999; margin-top: 50px;">
                         <p>Selecione um evento para começar a configurar as ações</p>
                     </div>
@@ -1434,23 +1439,9 @@ function showEventEditorModal(component, componentId, componentType) {
             </div>
         </div>
         
-        <div style="padding: 20px; border-top: 1px solid #ddd; background: #f8f9fa; text-align: right;">
-            <button id="cancel-events" style="
-                background: #ccc;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 4px;
-                margin-right: 10px;
-                cursor: pointer;
-            ">Cancelar</button>
-            <button id="save-events" style="
-                background: #007acc;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 4px;
-                cursor: pointer;
-            ">Salvar Eventos</button>
+        <div style="padding: 20px; border-top: 1px solid #3e3e42; background: #333333; text-align: right;">
+            <button id="cancel-events" class="btn">Cancelar</button>
+            <button id="save-events" class="btn primary">Salvar Eventos</button>
         </div>
     `;
     
@@ -5045,7 +5036,7 @@ function showAddVariableModal() {
             number: 'Exemplo: 123',
             boolean: 'Exemplo: true',
             object: 'Exemplo: {"chave": "valor"}',
-            array: 'Exemplo: ["item1", "item2", 2, 3]'
+            array: 'Exemplo: ["item1", "item2", 2, 4]'
         };
 
         const updateExample = () => {
