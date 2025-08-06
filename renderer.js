@@ -4986,6 +4986,7 @@ function showAddVariableModal() {
             <div class="property-item">
                 <label class="property-label">Valor Inicial</label>
                 <input type="text" id="modal-var-value" class="property-input">
+                <div id="variable-example" style="font-size: 11px; color: #9d9d9d; margin-top: 5px; display: none;"></div>
             </div>
             <div class="property-item">
                 <label class="property-label">Tipo</label>
@@ -5034,6 +5035,33 @@ function showAddVariableModal() {
             closeModalHandler();
         }
     });
+
+    // Adicionar listener para o tipo de variável
+    const varTypeSelect = document.getElementById('modal-var-type');
+    const exampleDiv = document.getElementById('variable-example');
+    if (varTypeSelect && exampleDiv) {
+        const examples = {
+            string: 'Exemplo: "Olá, mundo"',
+            number: 'Exemplo: 123',
+            boolean: 'Exemplo: true',
+            object: 'Exemplo: {"chave": "valor"}',
+            array: 'Exemplo: ["item1", "item2", 2, 3]'
+        };
+
+        const updateExample = () => {
+            const selectedType = varTypeSelect.value;
+            if (examples[selectedType]) {
+                exampleDiv.textContent = examples[selectedType];
+                exampleDiv.style.display = 'block';
+            } else {
+                exampleDiv.style.display = 'none';
+            }
+        };
+
+        varTypeSelect.addEventListener('change', updateExample);
+        // Show example for the default selected type
+        updateExample();
+    }
 }
 
 function closeAddVariableModal() {
