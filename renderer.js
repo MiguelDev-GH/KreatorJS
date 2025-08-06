@@ -1264,40 +1264,34 @@ const eventSystem = {
     availableActions: {
         // Ações para elementos de texto (label, input, textarea)
         text: [
+            { id: 'change_style', name: 'Alterar Estilo', description: 'Alterar o estilo do elemento' },
             { id: 'change_text', name: 'Alterar texto', description: 'Mudar o texto do elemento' },
-            { id: 'change_color', name: 'Alterar cor', description: 'Mudar a cor do texto' },
-            { id: 'change_size', name: 'Alterar tamanho', description: 'Mudar o tamanho da fonte' },
             { id: 'show_hide', name: 'Mostrar/Ocultar', description: 'Mostrar ou ocultar o elemento' },
             { id: 'move_element', name: 'Mover elemento', description: 'Alterar posição do elemento' },
-            { id: 'change_border', name: 'Alterar borda', description: 'Mudar estilo da borda' },
-            { id: 'resize_panel', name: 'Redimensionar painel', description: 'Alterar tamanho do painel' }
         ],
         
         // Ações para elementos visuais (div, image, button)
         visual: [
+            { id: 'change_style', name: 'Alterar Estilo', description: 'Alterar o estilo do elemento' },
             { id: 'change_text', name: 'Alterar texto', description: 'Mudar o texto do elemento' },
-            { id: 'change_background', name: 'Alterar fundo', description: 'Mudar cor de fundo' },
-            { id: 'change_border', name: 'Alterar borda', description: 'Mudar estilo da borda' },
-            { id: 'change_size', name: 'Alterar tamanho', description: 'Mudar largura e altura' },
             { id: 'show_hide', name: 'Mostrar/Ocultar', description: 'Mostrar ou ocultar o elemento' },
             { id: 'move_element', name: 'Mover elemento', description: 'Alterar posição do elemento' },
-            { id: 'resize_panel', name: 'Redimensionar painel', description: 'Alterar tamanho do painel' }
         ],
         
         // Ações para inputs (exceto checkbox)
         input: [
+            { id: 'change_style', name: 'Alterar Estilo', description: 'Alterar o estilo do elemento' },
             { id: 'change_value', name: 'Alterar valor', description: 'Mudar o valor do campo' },
             { id: 'clear_value', name: 'Limpar valor', description: 'Limpar o conteúdo do campo' },
             { id: 'focus_element', name: 'Focar elemento', description: 'Dar foco ao campo' },
             { id: 'disable_enable', name: 'Habilitar/Desabilitar', description: 'Habilitar ou desabilitar o campo' },
             { id: 'show_hide', name: 'Mostrar/Ocultar', description: 'Mostrar ou ocultar o elemento' },
             { id: 'move_element', name: 'Mover elemento', description: 'Alterar posição do elemento' },
-            { id: 'change_border', name: 'Alterar borda', description: 'Mudar estilo da borda' },
-            { id: 'resize_panel', name: 'Redimensionar painel', description: 'Alterar tamanho do painel' }
         ],
         
         // Ações específicas para checkbox
         checkbox: [
+            { id: 'change_style', name: 'Alterar Estilo', description: 'Alterar o estilo do elemento' },
             { id: 'change_checkbox_text', name: 'Mudar texto checkbox', description: 'Mudar o texto do elemento checkbox' },
             { id: 'toggle_checkbox', name: 'Alternar checkbox', description: 'Marcar/desmarcar checkbox' },
             { id: 'disable_enable', name: 'Habilitar/Desabilitar', description: 'Habilitar ou desabilitar o checkbox' },
@@ -1491,6 +1485,88 @@ function closeEventEditorModal(isSaving = false) {
         globalEvents = eventsBackup.globalEvents;
     }
     eventsBackup = null; // Limpa o backup
+}
+
+function showStyleEditorModal(targetId, callback) {
+    const modalId = 'style-editor-modal';
+    if (document.getElementById(modalId)) return;
+
+    const targetComponent = document.querySelector(`.designer-component[data-component-id="${targetId}"]`);
+    if (!targetComponent) {
+        logToConsole(`Elemento alvo "${targetId}" não encontrado para o editor de estilo.`, 'error');
+        return;
+    }
+    const element = targetComponent.firstElementChild;
+    if (!element) return;
+
+    const componentType = targetComponent.dataset.componentType;
+    const componentDef = componentLibrary.find(c => c.type === componentType);
+    if (!componentDef) return;
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0,0,0,0.6); display: flex; justify-content: center;
+        align-items: center; z-index: 10002; backdrop-filter: blur(2px);
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.cssText = `
+        max-width: 500px; height: auto; max-height: 80vh; display: flex;
+        flex-direction: column;
+    `;
+
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Editor de Estilo - ${targetId}</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+            ${generateStylePropertyInputs(componentDef, targetComponent)}
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Cancelar</button>
+            <button id="btn-save-style-changes" class="btn primary">Salvar Alterações</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    const initialStyles = {};
+    const inputs = modal.querySelectorAll('.property-input[data-property]');
+    inputs.forEach(input => {
+        const prop = input.dataset.property;
+        initialStyles[prop] = getPropertyValue(element, prop);
+        // Ensure the input value reflects the initial state, especially for complex properties
+        input.value = initialStyles[prop];
+    });
+
+    const closeModal = () => {
+        modal.remove();
+    };
+
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
+    modal.querySelector('#btn-save-style-changes').addEventListener('click', () => {
+        const changedStyles = {};
+        inputs.forEach(input => {
+            const prop = input.dataset.property;
+            const currentValue = input.value;
+            // Only include the style if it has actually changed from the initial state
+            if (currentValue !== initialStyles[prop]) {
+                changedStyles[prop] = currentValue;
+            }
+        });
+
+        if (callback) {
+            callback(changedStyles);
+        }
+        closeModal();
+    });
 }
 
 function showManipulateVariableModal(callback) {
@@ -1713,8 +1789,10 @@ function renderActionItem(action, index) {
         displayValue = displayValue.substring(0, 47) + '...';
     }
 
+    const escapedValue = (action.value || '').replace(/"/g, '&quot;');
+
     return `
-        <div class="action-item" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${action.value || ''}" style="
+        <div class="action-item" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${escapedValue}" style="
             padding: 12px;
             margin-bottom: 8px;
             border: 1px solid #5a5a5a;
@@ -1855,6 +1933,44 @@ function updateActionParameters(valueToSet = null) {
     let parametersHTML = '';
     
     switch (actionType) {
+        case 'change_style':
+            const targetId = document.getElementById('target-element').value;
+            // We use a button to open a modal, and a hidden input to store the result.
+            parametersHTML = `
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Estilos a serem alterados:</label>
+                <input type="hidden" id="action-value" value="${valueToSet || '{}'}">
+                <button type="button" id="open-style-editor" class="btn primary" style="width: 100%; padding: 8px;">Abrir Editor de Estilo</button>
+                <div id="style-preview" style="margin-top: 10px; font-size: 12px; color: #9d9d9d; max-height: 50px; overflow-y: auto;">...</div>
+            `;
+            parametersContainer.innerHTML = parametersHTML;
+
+            // Function to update the preview
+            const updatePreview = (styles) => {
+                const previewDiv = document.getElementById('style-preview');
+                if (Object.keys(styles).length === 0) {
+                    previewDiv.textContent = 'Nenhuma alteração de estilo definida.';
+                } else {
+                    previewDiv.innerHTML = '<strong>Alterações:</strong> ' + Object.entries(styles).map(([k, v]) => `${k}: ${v}`).join(', ');
+                }
+            };
+            
+            // Initial preview
+            try {
+                updatePreview(JSON.parse(valueToSet || '{}'));
+            } catch (e) {
+                updatePreview({});
+            }
+
+            // Add listener to the button
+            document.getElementById('open-style-editor').addEventListener('click', () => {
+                showStyleEditorModal(targetId, (changedStyles) => {
+                    const valueInput = document.getElementById('action-value');
+                    valueInput.value = JSON.stringify(changedStyles);
+                    updatePreview(changedStyles);
+                });
+            });
+            return; // Early return because we're setting innerHTML and listeners directly
+
         case 'change_text':
         case 'change_value':
         case 'show_alert':
@@ -1864,64 +1980,6 @@ function updateActionParameters(valueToSet = null) {
             parametersHTML = `
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Valor:</label>
                 <input type="text" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${valueToSet || ''}">
-            `;
-            break;
-        case 'change_color':
-        case 'change_background':
-            parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Cor:</label>
-                <input type="color" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${valueToSet || '#000000'}">
-            `;
-            break;
-        case 'change_size':
-            parametersHTML = `
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Tamanho (px):</label>
-                <input type="number" id="action-value" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${valueToSet || '14'}">
-            `;
-            break;
-        case 'change_border':
-            const borderValues = valueToSet ? valueToSet.split(',') : ['solid', '1', '#000000', '0'];
-            parametersHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Estilo:</label>
-                        <select id="action-value-style" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                            <option value="solid" ${borderValues[0] === 'solid' ? 'selected' : ''}>Sólida</option>
-                            <option value="dashed" ${borderValues[0] === 'dashed' ? 'selected' : ''}>Tracejada</option>
-                            <option value="dotted" ${borderValues[0] === 'dotted' ? 'selected' : ''}>Pontilhada</option>
-                            <option value="none" ${borderValues[0] === 'none' ? 'selected' : ''}>Nenhuma</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Largura (px):</label>
-                        <input type="number" id="action-value-width" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${borderValues[1]}">
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Cor:</label>
-                        <input type="color" id="action-value-color" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${borderValues[2]}">
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Raio (px):</label>
-                        <input type="number" id="action-value-radius" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${borderValues[3]}">
-                    </div>
-                </div>
-            `;
-            break;
-        case 'resize_panel':
-            const sizeValues = valueToSet ? valueToSet.split(',') : ['200', '100'];
-            parametersHTML = `
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nova largura (px):</label>
-                        <input type="number" id="action-value-width" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${sizeValues[0]}">
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Nova altura (px):</label>
-                        <input type="number" id="action-value-height" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" value="${sizeValues[1]}">
-                    </div>
-                </div>
             `;
             break;
         case 'move_element':
@@ -3395,23 +3453,14 @@ function saveAction() {
     const targetElement = document.getElementById('target-element').value;
     const actionType = document.getElementById('action-type').value;
     let actionValue = '';
-    
-    // Para ações com múltiplos parâmetros
+
     if (actionType === 'move_element') {
         const xValue = document.getElementById('action-value-x')?.value || '0';
         const yValue = document.getElementById('action-value-y')?.value || '0';
         actionValue = `${xValue},${yValue}`;
-    } else if (actionType === 'change_border') {
-        const style = document.getElementById('action-value-style')?.value || 'solid';
-        const width = document.getElementById('action-value-width')?.value || '1';
-        const color = document.getElementById('action-value-color')?.value || '#000000';
-        const radius = document.getElementById('action-value-radius')?.value || '0';
-        actionValue = `${style},${width},${color},${radius}`;
-    } else if (actionType === 'resize_panel') {
-        const width = document.getElementById('action-value-width')?.value || '200';
-        const height = document.getElementById('action-value-height')?.value || '100';
-        actionValue = `${width},${height}`;
     } else {
+        // Para 'change_style', o valor já é um JSON string no input escondido.
+        // Para outras ações, é um valor simples.
         actionValue = document.getElementById('action-value')?.value || '';
     }
     
@@ -3762,19 +3811,19 @@ function changeText(id, text) {
     }
 }
 
-function changeColor(id, color) {
+function applyStyles(id, styles) {
     const element = getElementById(id);
-    if (element) element.style.color = color;
-}
-
-function changeBackground(id, color) {
-    const element = getElementById(id);
-    if (element) element.style.backgroundColor = color;
-}
-
-function changeFontSize(id, size) {
-    const element = getElementById(id);
-    if (element) element.style.fontSize = size + 'px';
+    if (!element) return;
+    try {
+        const styleObject = (typeof styles === 'string') ? JSON.parse(styles) : styles;
+        for (const prop in styleObject) {
+            if (Object.prototype.hasOwnProperty.call(styleObject, prop)) {
+                element.style[prop] = styleObject[prop];
+            }
+        }
+    } catch (e) {
+        console.error('Erro ao aplicar estilos: JSON inválido.', styles);
+    }
 }
 
 function moveElement(id, x, y) {
@@ -3790,24 +3839,6 @@ function clearValue(id) {
     const element = getElementById(id);
     if (element && (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA')) {
         element.value = '';
-    }
-}
-
-function resizeElement(id, width, height) {
-    const element = getElementById(id);
-    if (element) {
-        element.style.width = width + 'px';
-        element.style.height = height + 'px';
-    }
-}
-
-function changeBorder(id, style, width, color, radius) {
-    const element = getElementById(id);
-    if (element) {
-        element.style.borderStyle = style;
-        element.style.borderWidth = width + 'px';
-        element.style.borderColor = color;
-        element.style.borderRadius = radius + 'px';
     }
 }
 
@@ -4074,6 +4105,9 @@ function generateActionCode(action) {
     } else {
         // Ação em elemento específico
         switch (action.actionType) {
+            case 'change_style':
+                code = `    applyStyles('${action.targetId}', ${resolvedValue});\n`;
+                break;
             case 'change_text':
                 code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
                 break;
@@ -4090,27 +4124,6 @@ function generateActionCode(action) {
                     code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]');\n    if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = false;\n`;
                 } else {
                     code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]');\n    if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = !checkbox_${action.targetId}.checked;\n`;
-                }
-                break;
-            case 'change_color':
-                code = `    changeColor('${action.targetId}', ${resolvedValue});\n`;
-                break;
-            case 'change_background':
-                code = `    changeBackground('${action.targetId}', ${resolvedValue});\n`;
-                break;
-            case 'change_size':
-                code = `    changeFontSize('${action.targetId}', ${resolvedValue});\n`;
-                break;
-            case 'change_border':
-                if (action.value && action.value.includes(',')) {
-                    const [style, width, color, radius] = action.value.split(',');
-                    code = `    changeBorder('${action.targetId}', '${style}', ${width}, '${color}', ${radius});\n`;
-                }
-                break;
-            case 'resize_panel':
-                if (action.value && action.value.includes(',')) {
-                    const [width, height] = action.value.split(',');
-                    code = `    resizeElement('${action.targetId}', ${width}, ${height});\n`;
                 }
                 break;
             case 'move_element':
