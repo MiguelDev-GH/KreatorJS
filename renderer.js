@@ -530,6 +530,9 @@ function setupComponentEvents(wrapper) {
     let componentStartPos = { x: 0, y: 0 };
     
     wrapper.addEventListener('mousedown', (e) => {
+        // Apenas o botão esquerdo (principal) do mouse deve iniciar o arrasto
+        if (e.button !== 0) return;
+        
         // Não iniciar drag se clicar no resize handle
         if (e.target.classList.contains('resize-handle')) return;
         
@@ -4290,17 +4293,16 @@ function handleWheelZoom(e) {
 }
 
 function handlePanStart(e) {
-    // Pan with middle mouse button OR space + left click
     const visualDesigner = document.getElementById('visual-designer');
-    // Only pan if the click is on the designer background, not on a component
-    if (e.target === visualDesigner || e.target.classList.contains('designer-canvas')) {
+    if (!visualDesigner) return;
+
+    // Pan with middle mouse button OR space + left click, as long as it's within the designer
+    if (visualDesigner.contains(e.target)) {
         if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
             e.preventDefault();
             isPanning = true;
             lastMousePos = { x: e.clientX, y: e.clientY };
-            if (visualDesigner) {
-                visualDesigner.style.cursor = 'grabbing';
-            }
+            visualDesigner.style.cursor = 'grabbing';
         }
     }
 }
