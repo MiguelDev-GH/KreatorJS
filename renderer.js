@@ -2574,11 +2574,10 @@ function generateHTML() {
     
     components.forEach(component => {
         const element = component.firstElementChild;
-        const rect = component.getBoundingClientRect();
-        const canvasRect = canvas.getBoundingClientRect();
         
-        const x = rect.left - canvasRect.left;
-        const y = rect.top - canvasRect.top;
+        // Usar style.left e style.top para obter a posição não escalonada
+        const x = parseInt(component.style.left) || 0;
+        const y = parseInt(component.style.top) || 0;
         
         // Clonar elemento e adicionar posicionamento
         const clone = element.cloneNode(true);
