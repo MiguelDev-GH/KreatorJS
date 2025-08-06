@@ -1308,7 +1308,6 @@ const eventSystem = {
         // Ações globais
         global: [
             { id: 'show_alert', name: 'Mostrar alerta', description: 'Exibir uma mensagem de alerta' },
-            { id: 'show_custom_alert', name: 'Mostrar alerta personalizado', description: 'Exibir uma mensagem de alerta personalizada' },
             { id: 'console_log', name: 'Log no console', description: 'Escrever mensagem no console do programa' },
             { id: 'redirect_page', name: 'Redirecionar página', description: 'Navegar para outra página' },
             { id: 'manipulate_variable', name: 'Manipular variáveis', description: 'Alterar o valor de uma variável' }
@@ -1616,14 +1615,21 @@ function selectEventForEditing(eventName, componentType, componentId) {
     
     // Destacar evento selecionado
     document.querySelectorAll('.event-item').forEach(item => {
-        item.style.backgroundColor = item.dataset.eventName === eventName ? '#e3f2fd' : 'white';
-        item.style.borderColor = item.dataset.eventName === eventName ? '#2196f3' : '#ddd';
+        const isSelected = item.dataset.eventName === eventName;
+        const isConfigured = item.querySelector('div > span')?.textContent.includes('Configurado');
+
+        item.style.backgroundColor = isSelected ? '#007acc' : (isConfigured ? '#0e639c' : '#3c3c3c');
+        item.style.borderColor = isSelected ? '#0099ff' : '#5a5a5a';
+        
+        // Reset hover styles to re-apply them correctly
+        item.onmouseover = function() { this.style.backgroundColor = isSelected ? '#007acc' : '#4a4a4a'; };
+        item.onmouseout = function() { this.style.backgroundColor = isSelected ? '#007acc' : (isConfigured ? '#0e639c' : '#3c3c3c'); };
     });
     
     // Atualizar info do evento selecionado
     const eventInfo = eventSystem.availableEvents[componentType].find(e => e.name === eventName);
     document.getElementById('selected-event-info').innerHTML = `
-        Configurando: <strong>${eventInfo.label}</strong> - ${eventInfo.description}
+        Configurando: <strong style="color: #569cd6;">${eventInfo.label}</strong> &mdash; <span style="color: #9d9d9d;">${eventInfo.description}</span>
     `;
     
     // Carregar editor de ações
@@ -1651,36 +1657,30 @@ function loadActionsEditor(eventName, componentType, componentId) {
     }
 
     const loopIntervalHTML = isGlobal && eventName === 'loop' ? `
-        <div class="property-item" style="margin-bottom: 20px; padding: 10px; background: #f0f0f0; border-radius: 4px;">
-            <label class="property-label" style="font-weight: bold; color: #333;">Intervalo do Loop (ms):</label>
-            <input type="number" id="loop-interval" class="property-input" value="${loopInterval}" style="background: white; border-color: #ccc;">
-            <small style="color: #666;">Define o tempo em milissegundos entre cada execução das ações.</small>
+        <div class="property-item" style="margin-bottom: 20px; padding: 15px; background: #2d2d30; border-radius: 4px; border: 1px solid #3e3e42;">
+            <label class="property-label" style="font-weight: bold; color: #d4d4d4;">Intervalo do Loop (ms):</label>
+            <input type="number" id="loop-interval" class="property-input" value="${loopInterval}" style="background: #3c3c3c; border-color: #5a5a5a; color: #d4d4d4; padding: 8px; border-radius: 3px;">
+            <small style="color: #9d9d9d; margin-top: 5px; display: block;">Define o tempo em milissegundos entre cada execução das ações.</small>
         </div>
     ` : '';
     
     actionsEditor.innerHTML = `
         ${loopIntervalHTML}
         <div style="margin-bottom: 20px;">
-            <h4 style="margin: 0 0 10px 0; color: #333;">Ações para este evento:</h4>
+            <h4 style="margin: 0 0 10px 0; color: #569cd6; font-size: 14px; text-transform: uppercase;">Ações para este evento:</h4>
             <div id="actions-list">
                 ${currentActions.map((action, index) => renderActionItem(action, index)).join('')}
             </div>
-            <button id="add-action" style="
-                background: #4caf50;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                cursor: pointer;
-                margin-top: 10px;
-            ">+ Adicionar Ação</button>
+             <button id="add-action" class="btn primary" style="margin-top: 10px;">
+                + Adicionar Ação
+            </button>
         </div>
         
-        <div id="action-selector" style="display: none; margin-top: 20px; padding: 15px; background: #f5f5f5; border-radius: 4px;">
-            <h4 style="margin: 0 0 15px 0; color: #333;">Selecionar Ação:</h4>
+        <div id="action-selector" style="display: none; margin-top: 20px; padding: 20px; background: #2d2d30; border-radius: 6px; border: 1px solid #3e3e42;">
+            <h4 style="margin: 0 0 15px 0; color: #569cd6; font-size: 14px; text-transform: uppercase;">Selecionar Ação:</h4>
             <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Elemento Alvo:</label>
-                <select id="target-element" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #d4d4d4; font-size: 12px;">Elemento Alvo:</label>
+                <select id="target-element" class="property-input" style="width: 100%;">
                     <option value="">Selecione um elemento...</option>
                     ${getAllComponentsForSelection(componentId).map(comp => 
                         `<option value="${comp.id}">${comp.id} (${comp.type})</option>`
@@ -1691,9 +1691,9 @@ function loadActionsEditor(eventName, componentType, componentId) {
             <div id="available-actions" style="margin-bottom: 15px;">
                 <!-- Ações serão carregadas dinamicamente -->
             </div>
-            <div style="text-align: right;">
-                <button id="cancel-action" style="background: #ccc; border: none; padding: 8px 16px; border-radius: 4px; margin-right: 10px; cursor: pointer;">Cancelar</button>
-                <button id="confirm-action" style="background: #007acc; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Adicionar</button>
+            <div style="text-align: right; margin-top: 20px; border-top: 1px solid #3e3e42; padding-top: 15px;">
+                <button id="cancel-action" class="btn">Cancelar</button>
+                <button id="confirm-action" class="btn primary" style="margin-left: 8px;">Adicionar</button>
             </div>
         </div>
     `;
@@ -1707,43 +1707,33 @@ function loadActionsEditor(eventName, componentType, componentId) {
 
 // Renderizar item de ação
 function renderActionItem(action, index) {
+    // Truncate long values for display
+    let displayValue = action.value || 'N/A';
+    if (displayValue.length > 50) {
+        displayValue = displayValue.substring(0, 47) + '...';
+    }
+
     return `
         <div class="action-item" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${action.value || ''}" style="
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: white;
+            border: 1px solid #5a5a5a;
+            border-radius: 6px;
+            background: #3c3c3c;
             display: flex;
             justify-content: space-between;
             align-items: center;
-        ">
+            transition: all 0.2s;
+        " onmouseover="this.style.backgroundColor='#4a4a4a'" onmouseout="this.style.backgroundColor='#3c3c3c'">
             <div>
-                <div style="font-weight: bold; color: #333;">${action.actionName}</div>
-                <div style="font-size: 12px; color: #666;">
-                    Alvo: ${action.targetId || 'Global'} | Valor: ${action.value || 'N/A'}
+                <div style="font-weight: bold; color: #d4d4d4; margin-bottom: 4px;">${action.actionName}</div>
+                <div style="font-size: 12px; color: #9d9d9d;">
+                    Alvo: <span style="color: #4ec9b0;">${action.targetId || 'Global'}</span> | Valor: <span style="color: #ce9178;">${displayValue}</span>
                 </div>
             </div>
             <div>
-                <button class="edit-action" data-index="${index}" style="
-                    background: #2196f3;
-                    color: white;
-                    border: none;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 12px;
-                    margin-right: 5px;
-                ">Editar</button>
-                <button class="remove-action" data-index="${index}" style="
-                    background: #f44336;
-                    color: white;
-                    border: none;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    font-size: 12px;
-                ">Remover</button>
+                <button class="edit-action btn" data-index="${index}">Editar</button>
+                <button class="remove-action btn" data-index="${index}" style="background-color: #dc3545; margin-left: 5px;">Remover</button>
             </div>
         </div>
     `;
@@ -1830,14 +1820,14 @@ function updateAvailableActions(actionToEdit = null) {
     }
     
     actionsContainer.innerHTML = `
-        <label style="display: block; margin-bottom: 5px; font-weight: bold;">Ação:</label>
-        <select id="action-type" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+        <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #d4d4d4; font-size: 12px;">Ação:</label>
+        <select id="action-type" class="property-input" style="width: 100%; margin-bottom: 10px;">
             <option value="">Selecione uma ação...</option>
             ${availableActions.map(action => 
                 `<option value="${action.id}">${action.name} - ${action.description}</option>`
             ).join('')}
         </select>
-        <div id="action-parameters" style="margin-top: 10px;">
+        <div id="action-parameters" style="margin-top: 15px; border-top: 1px solid #3e3e42; padding-top: 15px;">
             <!-- Parâmetros serão carregados dinamicamente -->
         </div>
     `;
@@ -4064,9 +4054,6 @@ function generateActionCode(action) {
         switch (action.actionType) {
             case 'show_alert':
                 code = `    alert(${resolvedValue});\n`;
-                break;
-            case 'show_custom_alert':
-                code = `    showCustomAlert('Alert', ${resolvedValue});\n`;
                 break;
             case 'console_log':
                 code = `    window.logToConsoleInPreview(${resolvedValue}, 'info');\n`;
