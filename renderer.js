@@ -376,7 +376,8 @@ function setupDesignerCanvas(canvas) {
     
     // Clique para deselecionar
     canvas.addEventListener('click', (e) => {
-        if (e.target === canvas) {
+        // Se o clique não foi em um componente de design, deseleciona
+        if (!e.target.closest('.designer-component')) {
             selectComponent(null);
         }
     });
