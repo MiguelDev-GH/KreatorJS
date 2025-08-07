@@ -816,7 +816,7 @@ function generateStylePropertyInputs(componentDef, component) {
             </div>
             <div class="property-item">
                 <label class="property-label">Cor da Borda</label>
-                <input type="color" class="property-input" data-property="borderColor" value="${getPropertyValue(element, 'borderColor') || '#000000'}">
+                <input type="${(getPropertyValue(element, 'borderColor') || '').trim().startsWith('<') ? 'text' : 'color'}" class="property-input" data-property="borderColor" value="${getPropertyValue(element, 'borderColor') || '#000000'}">
             </div>
             <div class="property-item">
                 <label class="property-label">Raio da Borda</label>
@@ -833,7 +833,11 @@ function generateStylePropertyInputs(componentDef, component) {
     
     styleProps.forEach(key => {
         const value = getPropertyValue(element, key);
-        const inputType = getInputType(key);
+        let inputType = getInputType(key);
+
+        if (inputType === 'color' && typeof value === 'string' && value.trim().startsWith('<')) {
+            inputType = 'text';
+        }
         
         html += `
             <div class="property-item">
@@ -922,11 +926,20 @@ function toggleStyleSection() {
 
 // Obter valor da propriedade
 function getPropertyValue(element, property) {
-    // Primeiro, verificar o estilo computado para obter o valor real
+    const wrapper = element.closest('.designer-component');
+
+    // Prioriza o valor bruto do dataset, se existir
+    if (wrapper) {
+        const propKey = `rawProp${property.charAt(0).toUpperCase() + property.slice(1)}`;
+        if (wrapper.dataset[propKey] !== undefined) {
+            return wrapper.dataset[propKey];
+        }
+    }
+
+    // Fallback para a lógica existente se nenhum valor bruto for encontrado
     const computedStyle = window.getComputedStyle(element);
     let value = computedStyle[property];
 
-    // Fallback para propriedades de estilo direto, se necessário
     if (!value) {
         value = element.style[property];
     }
@@ -1093,8 +1106,9 @@ function updateAllDynamicProperties() {
     allComponents.forEach(component => {
         // The component.dataset object is a map of all data-* attributes.
         for (const key in component.dataset) {
-            if (key.startsWith('rawProp')) { // e.g., rawProp-text
-                const propertyName = key.substring('rawProp'.length).toLowerCase();
+            if (key.startsWith('rawProp')) { // e.g., rawPropBackgroundColor
+                const propName = key.substring('rawProp'.length); // -> BackgroundColor
+                const propertyName = propName.charAt(0).toLowerCase() + propName.slice(1); // -> backgroundColor
                 const rawValue = component.dataset[key];
                 
                 // Always resolve and apply. This handles both initial application and updates.
