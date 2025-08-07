@@ -1338,3 +1338,38 @@ button[style*="font-size: 12px"]:hover {
     font-size: 11px;
     margin-left: 8px;
 }
+
+/* Estilos para o input de cor composto */
+.color-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #5a5a5a;
+    background-color: #3c3c3c;
+    border-radius: 3px;
+    padding-right: 4px;
+}
+
+.color-input-wrapper:focus-within {
+    border-color: #0e639c;
+}
+
+.color-input-wrapper .property-input {
+    border: none;
+    background-color: transparent;
+    flex-grow: 1;
+}
+
+.color-input-wrapper .property-input:focus {
+    box-shadow: none;
+}
+
+.color-input-wrapper .color-picker-input {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+}

@@ -740,6 +740,21 @@ function populateObjectInspector(component) {
     setupPropertyListeners();
 }
 
+// Helper function to generate a composite color input (text + color picker)
+function generateColorInputHTML(property, value, id = '') {
+    // If the value is a variable reference (e.g., "<my_var>"), use a default for the color picker
+    const isVar = typeof value === 'string' && value.trim().startsWith('<');
+    const colorValue = isVar ? '#ffffff' : value; // Default to white if it's a variable
+    const textValue = value; // The text input should show the raw value (including variables)
+
+    return `
+        <div class="color-input-wrapper">
+            <input type="text" class="property-input" data-property="${property}" value="${textValue}" ${id ? `id="${id}"` : ''}>
+            <input type="color" class="color-picker-input" value="${colorValue}">
+        </div>
+    `;
+}
+
 // Gerar inputs de propriedades básicas
 function generateBasicPropertyInputs(componentDef, component) {
     const element = component.firstElementChild;
@@ -792,10 +807,10 @@ function generateBasicPropertyInputs(componentDef, component) {
 function generateStylePropertyInputs(componentDef, component) {
     const element = component.firstElementChild;
     let html = '';
-    
+
     // Propriedades de estilo básicas
     const styleProps = ['backgroundColor', 'color', 'fontSize', 'fontWeight', 'padding', 'margin'];
-    
+
     // Seção de bordas
     html += `
         <div class="property-subsection">
@@ -816,7 +831,7 @@ function generateStylePropertyInputs(componentDef, component) {
             </div>
             <div class="property-item">
                 <label class="property-label">Cor da Borda</label>
-                <input type="${(getPropertyValue(element, 'borderColor') || '').trim().startsWith('<') ? 'text' : 'color'}" class="property-input" data-property="borderColor" value="${getPropertyValue(element, 'borderColor') || '#000000'}">
+                ${generateColorInputHTML('borderColor', getPropertyValue(element, 'borderColor') || '#000000')}
             </div>
             <div class="property-item">
                 <label class="property-label">Raio da Borda</label>
@@ -824,31 +839,33 @@ function generateStylePropertyInputs(componentDef, component) {
             </div>
         </div>
     `;
-    
+
     // Seção de cores e texto
     html += `
         <div class="property-subsection">
             <div class="property-subsection-title">Cores e Texto</div>
     `;
-    
+
     styleProps.forEach(key => {
         const value = getPropertyValue(element, key);
-        let inputType = getInputType(key);
+        const inputType = getInputType(key);
 
-        if (inputType === 'color' && typeof value === 'string' && value.trim().startsWith('<')) {
-            inputType = 'text';
-        }
-        
         html += `
             <div class="property-item">
                 <label class="property-label">${formatPropertyName(key)}</label>
-                <input type="${inputType}" class="property-input" data-property="${key}" value="${value}">
-            </div>
         `;
+
+        if (inputType === 'color') {
+            html += generateColorInputHTML(key, value);
+        } else {
+            html += `<input type="${inputType}" class="property-input" data-property="${key}" value="${value}">`;
+        }
+
+        html += `</div>`;
     });
-    
+
     html += `</div>`;
-    
+
     // Seção de posicionamento e dimensões
     html += `
         <div class="property-subsection">
@@ -859,7 +876,7 @@ function generateStylePropertyInputs(componentDef, component) {
             </div>
         </div>
     `;
-    
+
     // Propriedades extras de estilo
     const extraProperties = [
         { key: 'boxShadow', label: 'Sombra', type: 'text', value: getPropertyValue(element, 'boxShadow') || 'none' },
@@ -868,12 +885,12 @@ function generateStylePropertyInputs(componentDef, component) {
         { key: 'cursor', label: 'Cursor', type: 'select', value: getPropertyValue(element, 'cursor') || 'default', options: ['default', 'pointer', 'text', 'move', 'not-allowed', 'grab', 'grabbing'] },
         { key: 'textAlign', label: 'Alinhamento do Texto', type: 'select', value: getPropertyValue(element, 'textAlign') || 'left', options: ['left', 'center', 'right', 'justify'] }
     ];
-    
+
     html += `
         <div class="property-subsection">
             <div class="property-subsection-title">Propriedades Avançadas</div>
     `;
-    
+
     extraProperties.forEach(prop => {
         if (prop.type === 'select') {
             html += `
@@ -904,9 +921,9 @@ function generateStylePropertyInputs(componentDef, component) {
             `;
         }
     });
-    
+
     html += `</div>`;
-    
+
     return html;
 }
 
@@ -989,6 +1006,31 @@ function setupPropertyListeners() {
 
         // Attach the suggestion listener for text-based inputs
         attachSuggestionListener(input);
+    });
+
+    // Logic to sync color text inputs and color pickers
+    const colorWrappers = document.querySelectorAll('#object-inspector .color-input-wrapper');
+    colorWrappers.forEach(wrapper => {
+        const textInput = wrapper.querySelector('input[type="text"].property-input');
+        const colorInput = wrapper.querySelector('input[type="color"].color-picker-input');
+
+        if (textInput && colorInput) {
+            // Sync from text input to color picker
+            textInput.addEventListener('input', (e) => {
+                const value = e.target.value;
+                // A simple regex to check for valid hex color format (e.g., #fff, #ffffff)
+                if (/^#([0-9A-F]{3}){1,2}$/i.test(value)) {
+                    colorInput.value = value;
+                }
+            });
+
+            // Sync from color picker to text input
+            colorInput.addEventListener('input', (e) => {
+                textInput.value = e.target.value;
+                // Dispatch 'input' event on the text input to trigger the main property update listener
+                textInput.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        }
     });
     
     // Listeners de posição
@@ -1158,7 +1200,7 @@ function populateGlobalInspector() {
             </div>
             <div class="property-item">
                 <label class="property-label">Cor de Fundo</label>
-                <input type="color" class="property-input" id="global-bg-color" value="${currentBgColor}">
+                ${generateColorInputHTML('backgroundColor', currentBgColor, 'global-bg-color')}
             </div>
             <div class="property-item">
                 <label class="property-label">Overflow</label>
@@ -1207,11 +1249,28 @@ function populateGlobalInspector() {
 
     const bgColorInput = document.getElementById('global-bg-color');
     if (bgColorInput) {
+        const wrapper = bgColorInput.closest('.color-input-wrapper');
+        const colorInput = wrapper ? wrapper.querySelector('.color-picker-input') : null;
+
+        // Listener for the text input
         bgColorInput.addEventListener('input', (e) => {
-            globalProjectSettings.backgroundColor = e.target.value;
+            const value = e.target.value;
+            globalProjectSettings.backgroundColor = value;
+            if (colorInput && /^#([0-9A-F]{3}){1,2}$/i.test(value)) {
+                colorInput.value = value;
+            }
             applyAppSettings();
             saveState();
         });
+
+        // Listener for the color picker
+        if (colorInput) {
+            colorInput.addEventListener('input', (e) => {
+                bgColorInput.value = e.target.value;
+                // Dispatch event to trigger the text input's listener for a single point of update
+                bgColorInput.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        }
     }
 
     const overflowInput = document.getElementById('global-overflow');
@@ -1502,7 +1561,7 @@ function closeEventEditorModal(isSaving = false) {
     eventsBackup = null; // Limpa o backup
 }
 
-function showStyleEditorModal(targetId, callback) {
+function showStyleEditorModal(targetId, existingStyles, callback) {
     const modalId = 'style-editor-modal';
     if (document.getElementById(modalId)) return;
 
@@ -1553,11 +1612,27 @@ function showStyleEditorModal(targetId, callback) {
 
     const initialStyles = {};
     const inputs = modal.querySelectorAll('.property-input[data-property]');
+
     inputs.forEach(input => {
         const prop = input.dataset.property;
-        initialStyles[prop] = getPropertyValue(element, prop);
-        // Ensure the input value reflects the initial state, especially for complex properties
+
+        // Use existingStyles if provided, otherwise get from the component
+        if (existingStyles && existingStyles[prop] !== undefined) {
+            initialStyles[prop] = existingStyles[prop];
+        } else {
+            initialStyles[prop] = getPropertyValue(element, prop);
+        }
+
         input.value = initialStyles[prop];
+
+        // Also update the color picker part of a composite input
+        if (input.closest('.color-input-wrapper')) {
+            const colorInput = input.closest('.color-input-wrapper').querySelector('.color-picker-input');
+            if (colorInput) {
+                const isVar = typeof initialStyles[prop] === 'string' && initialStyles[prop].trim().startsWith('<');
+                colorInput.value = isVar ? '#ffffff' : initialStyles[prop];
+            }
+        }
     });
 
     const closeModal = () => {
@@ -1950,7 +2025,6 @@ function updateActionParameters(valueToSet = null) {
     switch (actionType) {
         case 'change_style':
             const targetId = document.getElementById('target-element').value;
-            // We use a button to open a modal, and a hidden input to store the result.
             parametersHTML = `
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Estilos a serem alterados:</label>
                 <input type="hidden" id="action-value" value="${valueToSet || '{}'}">
@@ -1959,32 +2033,40 @@ function updateActionParameters(valueToSet = null) {
             `;
             parametersContainer.innerHTML = parametersHTML;
 
-            // Function to update the preview
             const updatePreview = (styles) => {
                 const previewDiv = document.getElementById('style-preview');
-                if (Object.keys(styles).length === 0) {
+                const styleCount = Object.keys(styles).length;
+                if (styleCount === 0) {
                     previewDiv.textContent = 'Nenhuma alteração de estilo definida.';
                 } else {
-                    previewDiv.innerHTML = '<strong>Alterações:</strong> ' + Object.entries(styles).map(([k, v]) => `${k}: ${v}`).join(', ');
+                    previewDiv.innerHTML = `<strong>${styleCount} alteração(ões):</strong> ` + Object.entries(styles).map(([k, v]) => `${k}: ${v}`).join(', ');
                 }
             };
             
-            // Initial preview
+            let existingStyles = {};
             try {
-                updatePreview(JSON.parse(valueToSet || '{}'));
+                existingStyles = JSON.parse(valueToSet || '{}');
             } catch (e) {
-                updatePreview({});
+                logToConsole(`Erro ao parsear estilos existentes: ${e.message}`, 'warning');
             }
+            updatePreview(existingStyles);
 
-            // Add listener to the button
             document.getElementById('open-style-editor').addEventListener('click', () => {
-                showStyleEditorModal(targetId, (changedStyles) => {
+                let currentStyles = {};
+                try {
+                    currentStyles = JSON.parse(document.getElementById('action-value').value || '{}');
+                } catch (e) {
+                     logToConsole(`Erro ao parsear estilos atuais do input: ${e.message}`, 'warning');
+                }
+
+                showStyleEditorModal(targetId, currentStyles, (changedStyles) => {
                     const valueInput = document.getElementById('action-value');
-                    valueInput.value = JSON.stringify(changedStyles);
-                    updatePreview(changedStyles);
+                    const newStyles = { ...currentStyles, ...changedStyles };
+                    valueInput.value = JSON.stringify(newStyles);
+                    updatePreview(newStyles);
                 });
             });
-            return; // Early return because we're setting innerHTML and listeners directly
+            return;
 
         case 'change_text':
         case 'change_value':
