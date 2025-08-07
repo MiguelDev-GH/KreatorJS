@@ -3,6 +3,8 @@
 ### ⚠ AVISO: 
 O programa ainda contém alguns bugs e algumas funcionalidades não estão disponíveis ainda, mas com o tempo, tudo será consertado. Apenas para avisar que a aplicação não está completa e está em fase de teste. Aceito comentários e críticas sobre o projeto.
 
+![KreatorJS Logo](https://github.com/MiguelDev-GH/KreatorJS/blob/main/assets/icon.png)
+
 ## Visão Geral
 
 O KreatorJS é uma IDE visual completa para desenvolvimento de aplicações JavaScript. Permite criar interfaces de usuário através de drag-and-drop, configurar eventos de forma intuitiva e exportar projetos completos.
