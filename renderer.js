@@ -2025,9 +2025,10 @@ function updateActionParameters(valueToSet = null) {
     switch (actionType) {
         case 'change_style':
             const targetId = document.getElementById('target-element').value;
+            const escapedValueToSet = (valueToSet || '{}').replace(/"/g, '&quot;');
             parametersHTML = `
                 <label style="display: block; margin-bottom: 5px; font-weight: bold;">Estilos a serem alterados:</label>
-                <input type="hidden" id="action-value" value="${valueToSet || '{}'}">
+                <input type="hidden" id="action-value" value="${escapedValueToSet}">
                 <button type="button" id="open-style-editor" class="btn primary" style="width: 100%; padding: 8px;">Abrir Editor de Estilo</button>
                 <div id="style-preview" style="margin-top: 10px; font-size: 12px; color: #9d9d9d; max-height: 50px; overflow-y: auto;">...</div>
             `;
