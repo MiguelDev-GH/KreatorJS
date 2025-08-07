@@ -3,7 +3,7 @@
 ### ⚠ AVISO: 
 O programa ainda contém alguns bugs e algumas funcionalidades não estão disponíveis ainda, mas com o tempo, tudo será consertado. Apenas para avisar que a aplicação não está completa e está em fase de teste. Aceito comentários e críticas sobre o projeto.
 
-![KreatorJS Logo](https://github.com/MiguelDev-GH/KreatorJS/blob/main/assets/icon.png =150x)
+![KreatorJS Logo](https://github.com/MiguelDev-GH/KreatorJS/blob/main/assets/icon.png){width="150px"}
 
 ## Visão Geral
 
