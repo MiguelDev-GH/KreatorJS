@@ -5,7 +5,7 @@ O programa ainda contém alguns bugs e algumas funcionalidades não estão dispo
 
 <p align="center">
     <img src="https://github.com/MiguelDev-GH/KreatorJS/blob/main/assets/icon.png">
-p>
+<p>
 
 ## Visão Geral
 
