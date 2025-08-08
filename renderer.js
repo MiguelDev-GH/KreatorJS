@@ -5403,6 +5403,8 @@ function editVariable(name) {
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
     `;
 
+    const valueForInput = variable.type === 'string' ? variable.value : JSON.stringify(variable.value);
+
     modalContent.innerHTML = `
         <div class="modal-header">
             <h3>Editar Variável: ${name}</h3>
@@ -5415,7 +5417,7 @@ function editVariable(name) {
             </div>
             <div class="property-item">
                 <label class="property-label">Valor</label>
-                <input type="text" id="modal-edit-var-value" class="property-input" value="${JSON.stringify(variable.value).replace(/"/g, '&quot;')}">
+                <input type="text" id="modal-edit-var-value" class="property-input" value="${valueForInput.replace(/"/g, '&quot;')}">
             </div>
             <div class="property-item">
                 <label class="property-label">Tipo</label>
