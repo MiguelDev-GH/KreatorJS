@@ -1339,46 +1339,46 @@ const eventSystem = {
         // Ações para elementos de texto (label, input, textarea)
         text: [
             { id: 'change_style', name: 'Alterar Estilo', description: 'Alterar o estilo do elemento' },
-            { id: 'change_text', name: 'Alterar texto', description: 'Mudar o texto do elemento' },
+            { id: 'change_text', name: 'Alterar Texto', description: 'Mudar o texto do elemento' },
             { id: 'show_hide', name: 'Mostrar/Ocultar', description: 'Mostrar ou ocultar o elemento' },
-            { id: 'move_element', name: 'Mover elemento', description: 'Alterar posição do elemento' },
+            { id: 'move_element', name: 'Mover Elemento', description: 'Alterar posição do elemento' },
         ],
         
         // Ações para elementos visuais (div, image, button)
         visual: [
             { id: 'change_style', name: 'Alterar Estilo', description: 'Alterar o estilo do elemento' },
-            { id: 'change_text', name: 'Alterar texto', description: 'Mudar o texto do elemento' },
+            { id: 'change_text', name: 'Alterar Texto', description: 'Mudar o texto do elemento' },
             { id: 'show_hide', name: 'Mostrar/Ocultar', description: 'Mostrar ou ocultar o elemento' },
-            { id: 'move_element', name: 'Mover elemento', description: 'Alterar posição do elemento' },
+            { id: 'move_element', name: 'Mover Elemento', description: 'Alterar posição do elemento' },
         ],
         
         // Ações para inputs (exceto checkbox)
         input: [
             { id: 'change_style', name: 'Alterar Estilo', description: 'Alterar o estilo do elemento' },
-            { id: 'change_value', name: 'Alterar valor', description: 'Mudar o valor do campo' },
-            { id: 'clear_value', name: 'Limpar valor', description: 'Limpar o conteúdo do campo' },
-            { id: 'focus_element', name: 'Focar elemento', description: 'Dar foco ao campo' },
+            { id: 'change_value', name: 'Alterar Valor', description: 'Mudar o valor do campo' },
+            { id: 'clear_value', name: 'Limpar Valor', description: 'Limpar o conteúdo do campo' },
+            { id: 'focus_element', name: 'Focar Elemento', description: 'Dar foco ao campo' },
             { id: 'disable_enable', name: 'Habilitar/Desabilitar', description: 'Habilitar ou desabilitar o campo' },
             { id: 'show_hide', name: 'Mostrar/Ocultar', description: 'Mostrar ou ocultar o elemento' },
-            { id: 'move_element', name: 'Mover elemento', description: 'Alterar posição do elemento' },
+            { id: 'move_element', name: 'Mover Elemento', description: 'Alterar posição do elemento' },
         ],
         
         // Ações específicas para checkbox
         checkbox: [
             { id: 'change_style', name: 'Alterar Estilo', description: 'Alterar o estilo do elemento' },
-            { id: 'change_checkbox_text', name: 'Mudar texto checkbox', description: 'Mudar o texto do elemento checkbox' },
-            { id: 'toggle_checkbox', name: 'Alternar checkbox', description: 'Marcar/desmarcar checkbox' },
+            { id: 'change_checkbox_text', name: 'Mudar Texto do Checkbox', description: 'Mudar o texto do elemento checkbox' },
+            { id: 'toggle_checkbox', name: 'Alternar Checkbox', description: 'Marcar/desmarcar checkbox' },
             { id: 'disable_enable', name: 'Habilitar/Desabilitar', description: 'Habilitar ou desabilitar o checkbox' },
             { id: 'show_hide', name: 'Mostrar/Ocultar', description: 'Mostrar ou ocultar o elemento' },
-            { id: 'move_element', name: 'Mover elemento', description: 'Alterar posição do elemento' }
+            { id: 'move_element', name: 'Mover Elemento', description: 'Alterar posição do elemento' }
         ],
         
         // Ações globais
         global: [
-            { id: 'show_alert', name: 'Mostrar alerta', description: 'Exibir uma mensagem de alerta' },
-            { id: 'console_log', name: 'Log no console', description: 'Escrever mensagem no console do programa' },
-            { id: 'redirect_page', name: 'Redirecionar página', description: 'Navegar para outra página' },
-            { id: 'manipulate_variable', name: 'Manipular variáveis', description: 'Alterar o valor de uma variável' }
+            { id: 'show_alert', name: 'Mostrar Alerta', description: 'Exibir uma mensagem de alerta' },
+            { id: 'console_log', name: 'Log no Console', description: 'Escrever mensagem no console do programa' },
+            { id: 'redirect_page', name: 'Redirecionar Página', description: 'Navegar para outra página' },
+            { id: 'manipulate_variable', name: 'Manipular Variáveis', description: 'Alterar o valor de uma variável' }
         ]
     }
 };
@@ -1871,15 +1871,102 @@ function loadActionsEditor(eventName, componentType, componentId) {
     setupActionListeners();
 }
 
-// Renderizar item de ação
-function renderActionItem(action, index) {
-    // Truncate long values for display
-    let displayValue = action.value || 'N/A';
-    if (displayValue.length > 50) {
-        displayValue = displayValue.substring(0, 47) + '...';
+// Helper to highlight variables and truncate long values
+function formatActionValue(value) {
+    if (typeof value !== 'string') {
+        value = String(value || '');
     }
 
+    // Highlight variables/properties. Use a specific color.
+    let formattedValue = value.replace(/<([a-zA-Z0-9_.]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
+
+    // Truncate if necessary
+    if (value.length > 50) {
+        let truncated = value.substring(0, 47) + '...';
+        // Re-highlight after truncating
+        return truncated.replace(/<([a-zA-Z0-9_.]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
+    }
+
+    return formattedValue;
+}
+
+// Renderizar item de ação
+function renderActionItem(action, index) {
     const escapedValue = (action.value || '').replace(/"/g, '&quot;');
+    let actionTitle = '';
+    let actionDetails = '';
+
+    const highlight = (val) => formatActionValue(val);
+
+    switch (action.actionType) {
+        case 'manipulate_variable':
+            const [varName, operation, ...valueParts] = (action.value || ',,').split(',');
+            const value = valueParts.join(','); // Re-join in case value has commas
+            const target = `<span style="color: #9cdcfe;">${varName}</span>`;
+            const val = highlight(value);
+            switch (operation) {
+                case 'set':
+                    if (value.includes('<') && value.includes('.')) {
+                        actionTitle = 'Manipulação de variável | Propriedade de objeto';
+                        const [obj, prop] = value.replace(/[<>]/g, '').split('.');
+                        actionDetails = `Definir ${target} para a propriedade <span style="color: #4ec9b0;">${prop}</span> de <span style="color: #ce9178;">${obj}</span>`;
+                    } else {
+                        actionTitle = 'Manipulação de variável | Definir';
+                        actionDetails = `Definir ${target} para ${val}`;
+                    }
+                    break;
+                case 'add':
+                    actionTitle = 'Manipulação de variável | Adicionar';
+                    actionDetails = `Adicionar ${val} para ${target}`;
+                    break;
+                case 'subtract':
+                    actionTitle = 'Manipulação de variável | Diminuir';
+                    actionDetails = `Diminuir ${val} de ${target}`;
+                    break;
+                case 'multiply':
+                    actionTitle = 'Manipulação de variável | Multiplicar';
+                    actionDetails = `Multiplicar ${val} com ${target}`;
+                    break;
+                case 'divide':
+                    actionTitle = 'Manipulação de variável | Dividir';
+                    actionDetails = `Dividir ${val} de ${target}`;
+                    break;
+                default:
+                    actionTitle = 'Manipulação de variável';
+                    actionDetails = `Operação desconhecida em ${target}`;
+            }
+            break;
+
+        case 'change_text':
+            actionTitle = 'Alterar texto';
+            actionDetails = `Mudar texto de <span style="color: #4ec9b0;">${action.targetId}</span> para ${highlight(action.value)}`;
+            break;
+
+        case 'show_hide':
+            actionTitle = 'Mostrar/Ocultar';
+            let operationText = action.value;
+            if(action.value === 'show') operationText = 'Mostrar';
+            if(action.value === 'hide') operationText = 'Ocultar';
+            if(action.value === 'toggle') operationText = 'Alternar visibilidade de';
+            actionDetails = `${operationText} <span style="color: #4ec9b0;">${action.targetId}</span>`;
+            break;
+
+        case 'show_alert':
+            actionTitle = 'Mostrar Alerta';
+            actionDetails = `Exibir alerta com texto: ${highlight(action.value)}`;
+            break;
+
+        case 'console_log':
+            actionTitle = 'Log no Console';
+            actionDetails = `Escrever no console: ${highlight(action.value)}`;
+            break;
+
+        default:
+            // Fallback for other actions
+            actionTitle = action.actionName || action.actionType.replace(/_/g, ' '); // Use actionName or format actionType
+            actionDetails = `Alvo: <span style="color: #4ec9b0;">${action.targetId || 'Global'}</span> | Valor: ${highlight(action.value)}`;
+            break;
+    }
 
     return `
         <div class="action-item" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${escapedValue}" style="
@@ -1894,9 +1981,9 @@ function renderActionItem(action, index) {
             transition: all 0.2s;
         " onmouseover="this.style.backgroundColor='#4a4a4a'" onmouseout="this.style.backgroundColor='#3c3c3c'">
             <div>
-                <div style="font-weight: bold; color: #d4d4d4; margin-bottom: 4px;">${action.actionName}</div>
-                <div style="font-size: 12px; color: #9d9d9d;">
-                    Alvo: <span style="color: #4ec9b0;">${action.targetId || 'Global'}</span> | Valor: <span style="color: #ce9178;">${displayValue}</span>
+                <div style="font-weight: bold; color: #d4d4d4; margin-bottom: 4px;">${actionTitle}</div>
+                <div style="font-size: 12px; color: #cccccc;">
+                   ${actionDetails}
                 </div>
             </div>
             <div>
@@ -3586,7 +3673,6 @@ function saveAction() {
     const newAction = {
         targetId: targetElement === 'global' ? null : targetElement,
         actionType: actionType,
-        actionName: actionName,
         value: actionValue
     };
     
