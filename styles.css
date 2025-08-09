@@ -322,6 +322,10 @@ body {
     opacity: 1;
 }
 
+.designer-component * {
+    cursor: move;
+}
+
 /* Painel direito - Inspetor de Objetos */
 #right-panel {
     width: 300px;
