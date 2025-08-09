@@ -5,6 +5,7 @@
 const isElectron = typeof window.electronAPI !== 'undefined';
 const ipcRenderer = isElectron ? window.electronAPI : null;
 
+
 // Estado global da aplicação
 let currentProject = null;
 let selectedComponent = null;
@@ -1054,43 +1055,147 @@ function setupPropertyListeners() {
     }
 }
 
-function resolveValueInIDE(value) {
-    if (typeof value !== 'string') {
-        return value; // Return non-strings as-is
+/**
+ * Evaluates a mathematical expression using the Shunting-yard algorithm.
+ * Handles operator precedence, parentheses, and variable/component property resolution.
+ * @param {string} expression The mathematical expression to evaluate.
+ * @returns {number|string} The result of the evaluation or an error string.
+ */
+function evaluateExpression(expression) {
+    const precedence = { '+': 1, '-': 1, '*': 2, '/': 2 };
+    const operators = '+-*/()';
+
+    // 1. Tokenizer: Splits the expression into numbers, identifiers, and operators.
+    const tokenize = (expr) => {
+        // Improved regex to handle identifiers, numbers (including floats), and operators.
+        // It also filters out empty strings from whitespace splitting.
+        return expr.replace(/([+\-*/()])/g, ' $1 ').trim().split(/\s+/);
+    };
+
+    const tokens = tokenize(expression);
+    const outputQueue = [];
+    const operatorStack = [];
+
+    // 2. Shunting-yard algorithm: Converts infix notation to RPN.
+    for (const token of tokens) {
+        if (!isNaN(parseFloat(token)) && isFinite(token)) {
+            outputQueue.push(parseFloat(token));
+        } else if (operators.includes(token)) {
+            if (token === '(') {
+                operatorStack.push(token);
+            } else if (token === ')') {
+                while (operatorStack.length && operatorStack[operatorStack.length - 1] !== '(') {
+                    outputQueue.push(operatorStack.pop());
+                }
+                if (operatorStack[operatorStack.length - 1] === '(') {
+                    operatorStack.pop();
+                }
+            } else {
+                while (
+                    operatorStack.length &&
+                    precedence[operatorStack[operatorStack.length - 1]] >= precedence[token] &&
+                    operatorStack[operatorStack.length - 1] !== '('
+                ) {
+                    outputQueue.push(operatorStack.pop());
+                }
+                operatorStack.push(token);
+            }
+        } else { // It's an identifier
+            outputQueue.push(token);
+        }
+    }
+    while (operatorStack.length > 0) {
+        outputQueue.push(operatorStack.pop());
     }
 
-    const referenceRegex = /<([a-zA-Z0-9_.]+)>/g;
-    
-    // Replace each found reference with its corresponding value
-    const resolvedValue = value.replace(referenceRegex, (match, reference) => {
-        // First, check if the reference is a component property
-        if (reference.includes('.')) {
-            const [componentId, propName] = reference.split('.');
+    // 3. RPN Evaluator
+    const evaluationStack = [];
+    const resolveIdentifier = (identifier) => {
+        if (identifier.includes('.')) {
+            const [componentId, propName] = identifier.split('.');
             const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
             if (component) {
-                const element = component.firstElementChild;
-                if (element) {
-                    // Use the existing getPropertyValue to get the live value, which handles various property types
-                    return getPropertyValue(element, propName);
-                }
+                // Recursively resolve the value, which might be another expression
+                const resolvedProp = resolveValueInIDE(getPropertyValue(component.firstElementChild, propName));
+                const num = parseFloat(resolvedProp);
+                if (isNaN(num)) throw new Error(`Property '${identifier}' is not a number.`);
+                return num;
             }
-        } else {
-            // If not a component property, check if it's a project variable
-            if (projectVariables.hasOwnProperty(reference)) {
-                const variable = projectVariables[reference];
-                // For objects/arrays, stringify them. For others, return the value.
-                if (variable.type === 'object' || variable.type === 'array') {
-                    return JSON.stringify(variable.value);
-                }
-                return variable.value;
-            }
+        } else if (projectVariables.hasOwnProperty(identifier)) {
+            const val = projectVariables[identifier].value;
+             if (typeof val !== 'number') throw new Error(`Variable '${identifier}' is not a number.`);
+            return val;
         }
-        
-        // If the reference cannot be resolved, return the original tag to indicate an issue
-        return match;
-    });
+        throw new Error(`Unknown identifier: ${identifier}`);
+    };
 
-    return resolvedValue;
+    for (const token of outputQueue) {
+        if (typeof token === 'number') {
+            evaluationStack.push(token);
+        } else if (operators.includes(token)) {
+            const b = evaluationStack.pop();
+            const a = evaluationStack.pop();
+            switch (token) {
+                case '+': evaluationStack.push(a + b); break;
+                case '-': evaluationStack.push(a - b); break;
+                case '*': evaluationStack.push(a * b); break;
+                case '/':
+                    if (b === 0) return 'Infinity';
+                    evaluationStack.push(a / b);
+                    break;
+            }
+        } else { // It's an identifier
+            evaluationStack.push(resolveIdentifier(token));
+        }
+    }
+
+    if (evaluationStack.length !== 1) {
+        throw new Error('Invalid expression');
+    }
+
+    return evaluationStack[0];
+}
+
+function resolveValueInIDE(value) {
+    if (typeof value !== 'string') {
+        return value;
+    }
+
+    // Quick check to avoid regex on strings without expressions
+    if (!value.includes('<') || !value.includes('>')) {
+        return value;
+    }
+
+    const expressionRegex = /<([^>]+)>/g;
+
+    return value.replace(expressionRegex, (match, expression) => {
+        try {
+            // If expression is a simple reference, handle it directly to support non-numeric types
+            if (!/[-+*/()]/.test(expression)) {
+                 if (expression.includes('.')) {
+                    const [componentId, propName] = expression.split('.');
+                    const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
+                    if (component) {
+                        const element = component.firstElementChild;
+                        if (element) {
+                            return getPropertyValue(element, propName);
+                        }
+                    }
+                } else if (projectVariables.hasOwnProperty(expression)) {
+                    const variable = projectVariables[expression];
+                    if (variable.type === 'object' || variable.type === 'array') {
+                        return JSON.stringify(variable.value);
+                    }
+                    return variable.value;
+                }
+            }
+            // Otherwise, use the full expression evaluator for arithmetic
+            return evaluateExpression(expression);
+        } catch (error) {
+            console.warn(`Error evaluating expression "${expression}":`, error.message);
+            return match; // On error, return the original placeholder
+        }
+    });
 }
 
 function applyPropertyToComponent(component, property, value) {
@@ -1931,14 +2036,14 @@ function formatActionValue(value) {
         value = String(value || '');
     }
 
-    // Highlight variables/properties. Use a specific color.
-    let formattedValue = value.replace(/<([a-zA-Z0-9_.]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
+    // Highlight variables/properties/expressions. Use a specific color.
+    let formattedValue = value.replace(/<([^>]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
 
     // Truncate if necessary
     if (value.length > 50) {
         let truncated = value.substring(0, 47) + '...';
         // Re-highlight after truncating
-        return truncated.replace(/<([a-zA-Z0-9_.]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
+        return truncated.replace(/<([^>]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
     }
 
     return formattedValue;
@@ -4248,72 +4353,122 @@ ${globalEvents.loop.actions.map(action => generateActionCode(action)).join('')}
 // Gerar código para uma ação específica
 function generateActionCode(action) {
     let code = '';
-    
-    // Função para escapar strings JavaScript
-    function escapeJavaScript(str) {
-        return str.replace(/\\/g, '\\\\')
-                  .replace(/'/g, "\\'")
-                  .replace(/"/g, '\\"')
-                  .replace(/\n/g, '\\n')
-                  .replace(/\r/g, '\\r')
-                  .replace(/\t/g, '\\t');
-    }
 
+    /**
+     * Generates a JavaScript code string for a given value, which can be a literal,
+     * a simple variable/property reference, or a complex arithmetic expression.
+     * @param {*} value The value to process.
+     * @returns {string} A string of JavaScript code that will produce the value at runtime.
+     */
     function resolveValue(value) {
         if (typeof value !== 'string') {
-            return `'${escapeJavaScript(String(value || ''))}'`;
+            return `'${String(value || '').replace(/'/g, "\\'")}'`;
         }
-    
-        // Regex para encontrar todas as ocorrências de <VARIAVEL> ou <ID.PROPRIEDADE>
-        const referenceRegex = /<([a-zA-Z0-9_.]+)>/g;
-        const matches = [...value.matchAll(referenceRegex)];
-    
-        // Se não houver referências na string, retorna a string literal
-        if (matches.length === 0) {
-            return `'${escapeJavaScript(value)}'`;
+        if (!value.includes('<')) {
+            return `'${value.replace(/'/g, "\\'")}'`;
         }
-    
-        // Se a string for APENAS uma referência (ex: "<idade>" ou "<input_1.text>"), retorna o valor diretamente
-        if (matches.length === 1 && matches[0][0] === value) {
-            const ref = matches[0][1];
-            if (ref.includes('.')) {
-                const [id, prop] = ref.split('.');
-                return `getPropertyValue(getElementById('${id}'), '${prop}')`;
-            } else {
-                return `projectVariables['${ref}'].value`;
-            }
-        }
-    
-        // Se houver referências misturadas com texto, constrói uma string concatenada
+
+        // This function processes the entire value string, including parts outside of <...>
+        const expressionRegex = /<([^>]+)>/g;
         let result = [];
         let lastIndex = 0;
-    
-        for (const match of matches) {
-            const ref = match[1];
-            const startIndex = match.index;
-    
-            // Adiciona o texto literal antes da referência
-            if (startIndex > lastIndex) {
-                result.push(`'${escapeJavaScript(value.substring(lastIndex, startIndex))}'`);
+        let match;
+
+        while ((match = expressionRegex.exec(value)) !== null) {
+            // Push preceding text if any
+            if (match.index > lastIndex) {
+                result.push(`'${value.substring(lastIndex, match.index).replace(/'/g, "\\'")}'`);
             }
-    
-            // Adiciona a referência
-            if (ref.includes('.')) {
-                const [id, prop] = ref.split('.');
-                result.push(`getPropertyValue(getElementById('${id}'), '${prop}')`);
-            } else {
-                result.push(`projectVariables['${ref}'].value`);
-            }
-    
-            lastIndex = startIndex + match[0].length;
+
+            const expression = match[1].trim();
+
+            // Generate code for the expression inside <...>
+            const expressionCode = generateCodeForExpression(expression);
+            result.push(`(${expressionCode})`);
+
+            lastIndex = match.index + match[0].length;
         }
-    
-        // Adiciona o texto literal restante após a última referência
+
+        // Push remaining text if any
         if (lastIndex < value.length) {
-            result.push(`'${escapeJavaScript(value.substring(lastIndex))}'`);
+            result.push(`'${value.substring(lastIndex).replace(/'/g, "\\'")}'`);
         }
-    
+
         return result.join(' + ');
+    }
+
+    /**
+     * Generates a self-contained JavaScript code string for a single expression
+     * found inside <...>. It uses a Shunting-yard based approach to handle
+     * operator precedence.
+     * @param {string} expression The expression string (e.g., "var1 + var2 / 2").
+     * @returns {string} A string of JavaScript code.
+     */
+    function generateCodeForExpression(expression) {
+        // If it's a simple reference, handle it directly.
+        if (!/[-+*/()]/.test(expression)) {
+            if (expression.includes('.')) {
+                const [id, prop] = expression.split('.');
+                return `getPropertyValue(getElementById('${id}'), '${prop}')`;
+            }
+            return `projectVariables['${expression}'].value`;
+        }
+
+        // For complex arithmetic, parse and build an expression tree as a string.
+        const precedence = { '+': 1, '-': 1, '*': 2, '/': 2 };
+        const operators = '+-*/()';
+        const tokenize = (expr) => expr.replace(/([+\-*/()])/g, ' $1 ').trim().split(/\s+/);
+        const tokens = tokenize(expression);
+
+        const outputQueue = [];
+        const operatorStack = [];
+
+        for (const token of tokens) {
+            if (!isNaN(parseFloat(token)) && isFinite(token)) {
+                outputQueue.push(token); // It's a number literal
+            } else if (operators.includes(token)) {
+                if (token === '(') {
+                    operatorStack.push(token);
+                } else if (token === ')') {
+                    while (operatorStack.length && operatorStack[operatorStack.length - 1] !== '(') {
+                        outputQueue.push(operatorStack.pop());
+                    }
+                    operatorStack.pop(); // Pop '('
+                } else {
+                    while (operatorStack.length && precedence[operatorStack[operatorStack.length - 1]] >= precedence[token] && operatorStack[operatorStack.length - 1] !== '(') {
+                        outputQueue.push(operatorStack.pop());
+                    }
+                    operatorStack.push(token);
+                }
+            } else { // It's an identifier
+                outputQueue.push(token);
+            }
+        }
+        while (operatorStack.length > 0) {
+            outputQueue.push(operatorStack.pop());
+        }
+
+        // Build JS code from RPN queue
+        const codeStack = [];
+        const resolveIdentifierCode = (identifier) => {
+             if (identifier.includes('.')) {
+                const [id, prop] = identifier.split('.');
+                return `parseFloat(getPropertyValue(getElementById('${id}'), '${prop}'))`;
+            }
+            return `projectVariables['${identifier}'].value`;
+        };
+
+        for (const token of outputQueue) {
+            if (!operators.includes(token)) {
+                 // It's a number or an identifier
+                codeStack.push(!isNaN(parseFloat(token)) && isFinite(token) ? token : resolveIdentifierCode(token));
+            } else {
+                const b = codeStack.pop();
+                const a = codeStack.pop();
+                codeStack.push(`(${a} ${token} ${b})`);
+            }
+        }
+        return codeStack[0] || '""';
     }
     
     const resolvedValue = resolveValue(action.value || '');
@@ -4327,7 +4482,6 @@ function generateActionCode(action) {
             case 'console_log':
                 code = `    window.logToConsoleInPreview(${resolvedValue}, 'info');\n`;
                 break;
-
             case 'redirect_page':
                 code = `    window.location.href = ${resolvedValue};\n`;
                 break;
@@ -4357,11 +4511,11 @@ function generateActionCode(action) {
                 break;
             case 'toggle_checkbox':
                 if (action.value === 'check') {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]');\n    if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = true;\n`;
+                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = true;\n`;
                 } else if (action.value === 'uncheck') {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]');\n    if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = false;\n`;
+                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = false;\n`;
                 } else {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]');\n    if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = !checkbox_${action.targetId}.checked;\n`;
+                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = !checkbox_${action.targetId}.checked;\n`;
                 }
                 break;
             case 'move_element':
@@ -4371,13 +4525,9 @@ function generateActionCode(action) {
                 }
                 break;
             case 'show_hide':
-                if (action.value === 'show') {
-                    code = `    showElement('${action.targetId}');\n`;
-                } else if (action.value === 'hide') {
-                    code = `    hideElement('${action.targetId}');\n`;
-                } else {
-                    code = `    toggleElement('${action.targetId}');\n`;
-                }
+                if (action.value === 'show') code = `    showElement('${action.targetId}');\n`;
+                else if (action.value === 'hide') code = `    hideElement('${action.targetId}');\n`;
+                else code = `    toggleElement('${action.targetId}');\n`;
                 break;
             case 'clear_value':
                 code = `    clearValue('${action.targetId}');\n`;
@@ -4386,11 +4536,8 @@ function generateActionCode(action) {
                 code = `    focusElement('${action.targetId}');\n`;
                 break;
             case 'disable_enable':
-                if (action.value === 'enable') {
-                    code = `    enableElement('${action.targetId}');\n`;
-                } else if (action.value === 'disable') {
-                    code = `    disableElement('${action.targetId}');\n`;
-                }
+                if (action.value === 'enable') code = `    enableElement('${action.targetId}');\n`;
+                else if (action.value === 'disable') code = `    disableElement('${action.targetId}');\n`;
                 break;
         }
     }
@@ -5564,18 +5711,35 @@ function attachSuggestionListener(inputElement) {
     const handleInput = (e) => {
         const value = e.target.value;
         const cursorPos = e.target.selectionStart;
-        const lastOpenBracket = value.lastIndexOf('<', cursorPos - 1);
 
-        if (lastOpenBracket !== -1) {
-            const textBetween = value.substring(lastOpenBracket + 1, cursorPos);
-            // Show suggestions only if the text looks like a variable name
-            if (!/[\s>]/.test(textBetween)) {
-                show(textBetween);
-            } else {
-                hideSuggestions();
-            }
-        } else {
+        const lastOpenBracket = value.lastIndexOf('<', cursorPos - 1);
+        const lastCloseBracket = value.lastIndexOf('>', cursorPos - 1);
+
+        // Hide suggestions if we are not inside a <...> block
+        if (lastOpenBracket === -1 || lastOpenBracket < lastCloseBracket) {
             hideSuggestions();
+            return;
+        }
+
+        // Find the start of the current word/token the user is typing
+        const textInside = value.substring(lastOpenBracket + 1, cursorPos);
+        const lastDelimiterIndex = Math.max(
+            textInside.lastIndexOf(' '),
+            textInside.lastIndexOf('+'),
+            textInside.lastIndexOf('-'),
+            textInside.lastIndexOf('*'),
+            textInside.lastIndexOf('/'),
+            textInside.lastIndexOf('(')
+        );
+
+        const filterText = textInside.substring(lastDelimiterIndex + 1);
+
+        // Hide suggestions if the user just typed a space/operator,
+        // but show all suggestions if the expression is empty (right after '<').
+        if (filterText === '' && textInside.length > 0) {
+            hideSuggestions();
+        } else {
+            show(filterText);
         }
     };
 
