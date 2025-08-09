@@ -748,6 +748,11 @@ body {
     font-size: 12px;
 }
 
+.action-item.dragging {
+    opacity: 0.5;
+    background: #555;
+}
+
 .form-group select:focus, .form-group input:focus {
     outline: none;
     border-color: #007acc;

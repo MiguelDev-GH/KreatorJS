@@ -1430,7 +1430,7 @@ function showEventEditorModal(component, componentId, componentType) {
         padding: 0;
         border-radius: 8px;
         width: 90%;
-        max-width: 900px;
+        max-width: 1100px;
         height: 80%;
         display: flex;
         flex-direction: column;
@@ -1869,6 +1869,60 @@ function loadActionsEditor(eventName, componentType, componentId) {
     
     // Configurar listeners para ações existentes
     setupActionListeners();
+
+    // Drag and Drop para reordenar ações
+    const actionsList = document.getElementById('actions-list');
+    let draggedItem = null;
+
+    actionsList.addEventListener('dragstart', e => {
+        draggedItem = e.target;
+        e.target.classList.add('dragging');
+    });
+
+    actionsList.addEventListener('dragend', e => {
+        e.target.classList.remove('dragging');
+        draggedItem = null;
+    });
+
+    actionsList.addEventListener('dragover', e => {
+        e.preventDefault(); // Necessário para permitir o drop
+    });
+
+    actionsList.addEventListener('drop', e => {
+        e.preventDefault();
+        if (!draggedItem) return;
+
+        const afterElement = getDragAfterElement(actionsList, e.clientY);
+        if (afterElement == null) {
+            actionsList.appendChild(draggedItem);
+        } else {
+            actionsList.insertBefore(draggedItem, afterElement);
+        }
+
+        // Re-indexar todos os itens
+        const items = actionsList.querySelectorAll('.action-item');
+        items.forEach((item, index) => {
+            item.dataset.index = index;
+            // Atualizar também o data-index nos botões internos se necessário
+            item.querySelectorAll('[data-index]').forEach(btn => {
+                btn.dataset.index = index;
+            });
+        });
+    });
+
+    function getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.action-item:not(.dragging)')];
+
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
 }
 
 // Helper to highlight variables and truncate long values
@@ -1969,7 +2023,7 @@ function renderActionItem(action, index) {
     }
 
     return `
-        <div class="action-item" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${escapedValue}" style="
+        <div class="action-item" draggable="true" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${escapedValue}" style="
             padding: 12px;
             margin-bottom: 8px;
             border: 1px solid #5a5a5a;
@@ -1981,7 +2035,7 @@ function renderActionItem(action, index) {
             transition: all 0.2s;
         " onmouseover="this.style.backgroundColor='#4a4a4a'" onmouseout="this.style.backgroundColor='#3c3c3c'">
             <div>
-                <div style="font-weight: bold; color: #d4d4d4; margin-bottom: 4px;">${actionTitle}</div>
+                <div style="font-weight: bold; color: #d4d4d4; margin-bottom: 4px; cursor: move;">${actionTitle}</div>
                 <div style="font-size: 12px; color: #cccccc;">
                    ${actionDetails}
                 </div>
