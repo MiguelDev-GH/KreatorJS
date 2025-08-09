@@ -5,6 +5,7 @@
 const isElectron = typeof window.electronAPI !== 'undefined';
 const ipcRenderer = isElectron ? window.electronAPI : null;
 
+
 // Estado global da aplicação
 let currentProject = null;
 let selectedComponent = null;
@@ -1054,85 +1055,146 @@ function setupPropertyListeners() {
     }
 }
 
+/**
+ * Evaluates a mathematical expression using the Shunting-yard algorithm.
+ * Handles operator precedence, parentheses, and variable/component property resolution.
+ * @param {string} expression The mathematical expression to evaluate.
+ * @returns {number|string} The result of the evaluation or an error string.
+ */
+function evaluateExpression(expression) {
+    const precedence = { '+': 1, '-': 1, '*': 2, '/': 2 };
+    const operators = '+-*/()';
+
+    // 1. Tokenizer: Splits the expression into numbers, identifiers, and operators.
+    const tokenize = (expr) => {
+        // Improved regex to handle identifiers, numbers (including floats), and operators.
+        // It also filters out empty strings from whitespace splitting.
+        return expr.replace(/([+\-*/()])/g, ' $1 ').trim().split(/\s+/);
+    };
+
+    const tokens = tokenize(expression);
+    const outputQueue = [];
+    const operatorStack = [];
+
+    // 2. Shunting-yard algorithm: Converts infix notation to RPN.
+    for (const token of tokens) {
+        if (!isNaN(parseFloat(token)) && isFinite(token)) {
+            outputQueue.push(parseFloat(token));
+        } else if (operators.includes(token)) {
+            if (token === '(') {
+                operatorStack.push(token);
+            } else if (token === ')') {
+                while (operatorStack.length && operatorStack[operatorStack.length - 1] !== '(') {
+                    outputQueue.push(operatorStack.pop());
+                }
+                if (operatorStack[operatorStack.length - 1] === '(') {
+                    operatorStack.pop();
+                }
+            } else {
+                while (
+                    operatorStack.length &&
+                    precedence[operatorStack[operatorStack.length - 1]] >= precedence[token] &&
+                    operatorStack[operatorStack.length - 1] !== '('
+                ) {
+                    outputQueue.push(operatorStack.pop());
+                }
+                operatorStack.push(token);
+            }
+        } else { // It's an identifier
+            outputQueue.push(token);
+        }
+    }
+    while (operatorStack.length > 0) {
+        outputQueue.push(operatorStack.pop());
+    }
+
+    // 3. RPN Evaluator
+    const evaluationStack = [];
+    const resolveIdentifier = (identifier) => {
+        if (identifier.includes('.')) {
+            const [componentId, propName] = identifier.split('.');
+            const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
+            if (component) {
+                // Recursively resolve the value, which might be another expression
+                const resolvedProp = resolveValueInIDE(getPropertyValue(component.firstElementChild, propName));
+                const num = parseFloat(resolvedProp);
+                if (isNaN(num)) throw new Error(`Property '${identifier}' is not a number.`);
+                return num;
+            }
+        } else if (projectVariables.hasOwnProperty(identifier)) {
+            const val = projectVariables[identifier].value;
+             if (typeof val !== 'number') throw new Error(`Variable '${identifier}' is not a number.`);
+            return val;
+        }
+        throw new Error(`Unknown identifier: ${identifier}`);
+    };
+
+    for (const token of outputQueue) {
+        if (typeof token === 'number') {
+            evaluationStack.push(token);
+        } else if (operators.includes(token)) {
+            const b = evaluationStack.pop();
+            const a = evaluationStack.pop();
+            switch (token) {
+                case '+': evaluationStack.push(a + b); break;
+                case '-': evaluationStack.push(a - b); break;
+                case '*': evaluationStack.push(a * b); break;
+                case '/':
+                    if (b === 0) return 'Infinity';
+                    evaluationStack.push(a / b);
+                    break;
+            }
+        } else { // It's an identifier
+            evaluationStack.push(resolveIdentifier(token));
+        }
+    }
+
+    if (evaluationStack.length !== 1) {
+        throw new Error('Invalid expression');
+    }
+
+    return evaluationStack[0];
+}
+
 function resolveValueInIDE(value) {
     if (typeof value !== 'string') {
+        return value;
+    }
+
+    // Quick check to avoid regex on strings without expressions
+    if (!value.includes('<') || !value.includes('>')) {
         return value;
     }
 
     const expressionRegex = /<([^>]+)>/g;
 
     return value.replace(expressionRegex, (match, expression) => {
-        expression = expression.trim();
-        const arithmeticParts = expression.split(/([+\-*/])/);
-
-        if (arithmeticParts.length === 3) {
-            const lhsStr = arithmeticParts[0].trim();
-            const operator = arithmeticParts[1].trim();
-            const rhsStr = arithmeticParts[2].trim();
-
-            // Step 1: Resolve LHS
-            const lhsValue = resolveValueInIDE(`<${lhsStr}>`);
-            if (lhsValue === `<${lhsStr}>`) {
-                return match; // LHS reference not found
-            }
-
-            // Step 2: Resolve RHS (could be a literal number or another reference)
-            let rhsValue;
-            // Use a regex to strictly check if the string is a number, preventing misinterpretation of variable names.
-            if (/^-?\d+(\.\d+)?$/.test(rhsStr)) {
-                 rhsValue = parseFloat(rhsStr);
-            } else {
-                // If not a literal number, try to resolve as a reference
-                rhsValue = resolveValueInIDE(`<${rhsStr}>`);
-                if (rhsValue === `<${rhsStr}>`) {
-                    // If it's not a valid reference, and the operator is '+', treat as a literal string for concatenation.
-                    if (operator === '+') {
-                        return String(lhsValue) + rhsStr;
+        try {
+            // If expression is a simple reference, handle it directly to support non-numeric types
+            if (!/[-+*/()]/.test(expression)) {
+                 if (expression.includes('.')) {
+                    const [componentId, propName] = expression.split('.');
+                    const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
+                    if (component) {
+                        const element = component.firstElementChild;
+                        if (element) {
+                            return getPropertyValue(element, propName);
+                        }
                     }
-                    return match; // RHS is not a valid number or reference, and op is not '+'
+                } else if (projectVariables.hasOwnProperty(expression)) {
+                    const variable = projectVariables[expression];
+                    if (variable.type === 'object' || variable.type === 'array') {
+                        return JSON.stringify(variable.value);
+                    }
+                    return variable.value;
                 }
             }
-
-            // Step 3: Perform calculation
-            const numLhs = parseFloat(lhsValue);
-            const numRhs = parseFloat(rhsValue);
-
-            // If either operand is not a number, we can only do string concatenation with '+'
-            if (isNaN(numLhs) || isNaN(numRhs)) {
-                if (operator === '+') {
-                    return String(lhsValue) + String(rhsValue);
-                }
-                return match; // Cannot perform non-'+' operations on non-numbers
-            }
-
-            switch (operator) {
-                case '+': return numLhs + numRhs;
-                case '-': return numLhs - numRhs;
-                case '*': return numLhs * numRhs;
-                case '/': return numRhs !== 0 ? numLhs / numRhs : 'Infinity'; // Avoid division by zero
-                default: return match;
-            }
+            // Otherwise, use the full expression evaluator for arithmetic
+            return evaluateExpression(expression);
+        } catch (error) {
+            console.warn(`Error evaluating expression "${expression}":`, error.message);
+            return match; // On error, return the original placeholder
         }
-
-        // --- Fallback to original logic for simple references ---
-        if (expression.includes('.')) {
-            const [componentId, propName] = expression.split('.');
-            const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
-            if (component) {
-                const element = component.firstElementChild;
-                if (element) {
-                    return getPropertyValue(element, propName);
-                }
-            }
-        } else if (projectVariables.hasOwnProperty(expression)) {
-            const variable = projectVariables[expression];
-            if (variable.type === 'object' || variable.type === 'array') {
-                return JSON.stringify(variable.value);
-            }
-            return variable.value;
-        }
-
-        return match;
     });
 }
 
@@ -4291,95 +4353,122 @@ ${globalEvents.loop.actions.map(action => generateActionCode(action)).join('')}
 // Gerar código para uma ação específica
 function generateActionCode(action) {
     let code = '';
-    
-    function escapeJavaScript(str) {
-        if (typeof str !== 'string') return str;
-        return str.replace(/\\/g, '\\\\')
-                  .replace(/'/g, "\\'")
-                  .replace(/"/g, '\\"')
-                  .replace(/\n/g, '\\n')
-                  .replace(/\r/g, '\\r')
-                  .replace(/\t/g, '\\t');
-    }
 
+    /**
+     * Generates a JavaScript code string for a given value, which can be a literal,
+     * a simple variable/property reference, or a complex arithmetic expression.
+     * @param {*} value The value to process.
+     * @returns {string} A string of JavaScript code that will produce the value at runtime.
+     */
     function resolveValue(value) {
         if (typeof value !== 'string') {
-            return `'${escapeJavaScript(String(value || ''))}'`;
+            return `'${String(value || '').replace(/'/g, "\\'")}'`;
+        }
+        if (!value.includes('<')) {
+            return `'${value.replace(/'/g, "\\'")}'`;
         }
 
+        // This function processes the entire value string, including parts outside of <...>
         const expressionRegex = /<([^>]+)>/g;
-        const parts = [];
+        let result = [];
         let lastIndex = 0;
+        let match;
 
-        for (const match of [...value.matchAll(expressionRegex)]) {
+        while ((match = expressionRegex.exec(value)) !== null) {
+            // Push preceding text if any
+            if (match.index > lastIndex) {
+                result.push(`'${value.substring(lastIndex, match.index).replace(/'/g, "\\'")}'`);
+            }
+
             const expression = match[1].trim();
-            const startIndex = match.index;
 
-            if (startIndex > lastIndex) {
-                parts.push(`'${escapeJavaScript(value.substring(lastIndex, startIndex))}'`);
-            }
+            // Generate code for the expression inside <...>
+            const expressionCode = generateCodeForExpression(expression);
+            result.push(`(${expressionCode})`);
 
-            let resolvedExpressionCode;
-            const arithmeticParts = expression.split(/([+\-*/])/);
-
-            if (arithmeticParts.length === 3) {
-                const lhsStr = arithmeticParts[0].trim();
-                const operator = arithmeticParts[1].trim();
-                const rhsStr = arithmeticParts[2].trim();
-
-                const lhsCode = resolveValue(`<${lhsStr}>`);
-
-                let rhsCode;
-                // Use a more robust check for a string that is a numeric literal
-                if (/^-?\d+(\.\d+)?$/.test(rhsStr)) {
-                    rhsCode = parseFloat(rhsStr);
-                } else {
-                    rhsCode = resolveValue(`<${rhsStr}>`);
-                }
-
-                resolvedExpressionCode = `(() => {
-                    const a = ${lhsCode};
-                    const b = ${rhsCode};
-                    const numA = parseFloat(a);
-                    const numB = parseFloat(b);
-                    if ('${operator}' === '+' && (isNaN(numA) || isNaN(numB))) {
-                        return String(a) + String(b);
-                    }
-                    if (isNaN(numA) || isNaN(numB)) return NaN;
-                    switch ('${operator}') {
-                        case '+': return numA + numB;
-                        case '-': return numA - numB;
-                        case '*': return numA * numB;
-                        case '/': return numB !== 0 ? numA / numB : Infinity;
-                        default: return NaN;
-                    }
-                })()`;
-
-            } else {
-                if (expression.includes('.')) {
-                    const [id, prop] = expression.split('.');
-                    resolvedExpressionCode = `getPropertyValue(getElementById('${id}'), '${prop}')`;
-                } else {
-                    resolvedExpressionCode = `projectVariables['${expression}'].value`;
-                }
-            }
-            parts.push(resolvedExpressionCode);
-            lastIndex = startIndex + match[0].length;
+            lastIndex = match.index + match[0].length;
         }
 
+        // Push remaining text if any
         if (lastIndex < value.length) {
-            parts.push(`'${escapeJavaScript(value.substring(lastIndex))}'`);
+            result.push(`'${value.substring(lastIndex).replace(/'/g, "\\'")}'`);
         }
 
-        if (parts.length === 0) {
-            return `'${escapeJavaScript(value)}'`;
+        return result.join(' + ');
+    }
+
+    /**
+     * Generates a self-contained JavaScript code string for a single expression
+     * found inside <...>. It uses a Shunting-yard based approach to handle
+     * operator precedence.
+     * @param {string} expression The expression string (e.g., "var1 + var2 / 2").
+     * @returns {string} A string of JavaScript code.
+     */
+    function generateCodeForExpression(expression) {
+        // If it's a simple reference, handle it directly.
+        if (!/[-+*/()]/.test(expression)) {
+            if (expression.includes('.')) {
+                const [id, prop] = expression.split('.');
+                return `getPropertyValue(getElementById('${id}'), '${prop}')`;
+            }
+            return `projectVariables['${expression}'].value`;
         }
 
-        if (parts.length === 1 && value.trim().startsWith('<') && value.trim().endsWith('>')) {
-            return parts[0];
+        // For complex arithmetic, parse and build an expression tree as a string.
+        const precedence = { '+': 1, '-': 1, '*': 2, '/': 2 };
+        const operators = '+-*/()';
+        const tokenize = (expr) => expr.replace(/([+\-*/()])/g, ' $1 ').trim().split(/\s+/);
+        const tokens = tokenize(expression);
+
+        const outputQueue = [];
+        const operatorStack = [];
+
+        for (const token of tokens) {
+            if (!isNaN(parseFloat(token)) && isFinite(token)) {
+                outputQueue.push(token); // It's a number literal
+            } else if (operators.includes(token)) {
+                if (token === '(') {
+                    operatorStack.push(token);
+                } else if (token === ')') {
+                    while (operatorStack.length && operatorStack[operatorStack.length - 1] !== '(') {
+                        outputQueue.push(operatorStack.pop());
+                    }
+                    operatorStack.pop(); // Pop '('
+                } else {
+                    while (operatorStack.length && precedence[operatorStack[operatorStack.length - 1]] >= precedence[token] && operatorStack[operatorStack.length - 1] !== '(') {
+                        outputQueue.push(operatorStack.pop());
+                    }
+                    operatorStack.push(token);
+                }
+            } else { // It's an identifier
+                outputQueue.push(token);
+            }
+        }
+        while (operatorStack.length > 0) {
+            outputQueue.push(operatorStack.pop());
         }
 
-        return parts.join(' + ');
+        // Build JS code from RPN queue
+        const codeStack = [];
+        const resolveIdentifierCode = (identifier) => {
+             if (identifier.includes('.')) {
+                const [id, prop] = identifier.split('.');
+                return `parseFloat(getPropertyValue(getElementById('${id}'), '${prop}'))`;
+            }
+            return `projectVariables['${identifier}'].value`;
+        };
+
+        for (const token of outputQueue) {
+            if (!operators.includes(token)) {
+                 // It's a number or an identifier
+                codeStack.push(!isNaN(parseFloat(token)) && isFinite(token) ? token : resolveIdentifierCode(token));
+            } else {
+                const b = codeStack.pop();
+                const a = codeStack.pop();
+                codeStack.push(`(${a} ${token} ${b})`);
+            }
+        }
+        return codeStack[0] || '""';
     }
     
     const resolvedValue = resolveValue(action.value || '');
@@ -5622,18 +5711,35 @@ function attachSuggestionListener(inputElement) {
     const handleInput = (e) => {
         const value = e.target.value;
         const cursorPos = e.target.selectionStart;
-        const lastOpenBracket = value.lastIndexOf('<', cursorPos - 1);
 
-        if (lastOpenBracket !== -1) {
-            const textBetween = value.substring(lastOpenBracket + 1, cursorPos);
-            // Show suggestions only if the text looks like a variable name
-            if (!/[\s>]/.test(textBetween)) {
-                show(textBetween);
-            } else {
-                hideSuggestions();
-            }
-        } else {
+        const lastOpenBracket = value.lastIndexOf('<', cursorPos - 1);
+        const lastCloseBracket = value.lastIndexOf('>', cursorPos - 1);
+
+        // Hide suggestions if we are not inside a <...> block
+        if (lastOpenBracket === -1 || lastOpenBracket < lastCloseBracket) {
             hideSuggestions();
+            return;
+        }
+
+        // Find the start of the current word/token the user is typing
+        const textInside = value.substring(lastOpenBracket + 1, cursorPos);
+        const lastDelimiterIndex = Math.max(
+            textInside.lastIndexOf(' '),
+            textInside.lastIndexOf('+'),
+            textInside.lastIndexOf('-'),
+            textInside.lastIndexOf('*'),
+            textInside.lastIndexOf('/'),
+            textInside.lastIndexOf('(')
+        );
+
+        const filterText = textInside.substring(lastDelimiterIndex + 1);
+
+        // Hide suggestions if the user just typed a space/operator,
+        // but show all suggestions if the expression is empty (right after '<').
+        if (filterText === '' && textInside.length > 0) {
+            hideSuggestions();
+        } else {
+            show(filterText);
         }
     };
 
