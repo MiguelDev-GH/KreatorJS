@@ -453,7 +453,7 @@ function createComponent(type, x, y) {
     // Aplicar propriedades padrão
     const props = { ...componentDef.defaultProps };
     const html = generateComponentHTML(componentDef, props);
-    wrapper.innerHTML = html + '<div class="resize-handle"></div>';
+    wrapper.innerHTML = html + '<div class="resize-handle"></div><div class="move-handle">✢</div>';
     
     // Aplicar estilos
     applyComponentStyles(wrapper, props);
@@ -520,79 +520,61 @@ function setupComponentEvents(wrapper) {
         selectComponent(wrapper);
     });
     
-    // Duplo clique para editar evento
-    wrapper.addEventListener("dblclick", (e) => {
-        e.stopPropagation();
-        showEventEditorModal(wrapper, wrapper.dataset.componentId, wrapper.dataset.componentType);
-    });
     
-    // Drag para mover - apenas quando clicar e arrastar
-    let isDraggingComponent = false;
-    let dragStartPos = { x: 0, y: 0 };
-    let componentStartPos = { x: 0, y: 0 };
-    
-    wrapper.addEventListener('mousedown', (e) => {
-        // Apenas o botão esquerdo (principal) do mouse deve iniciar o arrasto
-        if (e.button !== 0) return;
-        
-        // Não iniciar drag se clicar no resize handle
-        if (e.target.classList.contains('resize-handle')) return;
-        
-        // Não iniciar drag se clicar em elementos interativos
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || 
-            e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') {
-            return;
-        }
-        
-        isDraggingComponent = false;
-        dragStartPos.x = e.clientX;
-        dragStartPos.y = e.clientY;
-        componentStartPos.x = parseInt(wrapper.style.left) || 0;
-        componentStartPos.y = parseInt(wrapper.style.top) || 0;
-        
-        const handleMouseMove = (e) => {
-            const deltaX = e.clientX - dragStartPos.x;
-            const deltaY = e.clientY - dragStartPos.y;
-            
-            // Só considerar como drag se mover mais de 5 pixels
-            if (!isDraggingComponent && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
-                isDraggingComponent = true;
-                wrapper.style.cursor = 'grabbing';
-            }
-            
-            if (isDraggingComponent) {
-                const newX = Math.max(0, componentStartPos.x + (deltaX / canvasScale));
-                const newY = Math.max(0, componentStartPos.y + (deltaY / canvasScale));
-                
-                wrapper.style.left = newX + 'px';
-                wrapper.style.top = newY + 'px';
-                
-                // Atualizar inspetor se este componente estiver selecionado
-                if (selectedComponent === wrapper) {
-                    const xInput = document.getElementById('prop-x');
-                    const yInput = document.getElementById('prop-y');
-                    if (xInput) xInput.value = newX;
-                    if (yInput) yInput.value = newY;
+    // Drag para mover com a alça de movimento
+    const moveHandle = wrapper.querySelector('.move-handle');
+    if (moveHandle) {
+        moveHandle.addEventListener('mousedown', (e) => {
+            // Apenas o botão esquerdo (principal) do mouse deve iniciar o arrasto
+            if (e.button !== 0) return;
+            e.stopPropagation(); // Prevenir que o clique na alça se propague para outros elementos
+
+            let isDraggingComponent = false;
+            let dragStartPos = { x: e.clientX, y: e.clientY };
+            let componentStartPos = { x: parseInt(wrapper.style.left) || 0, y: parseInt(wrapper.style.top) || 0 };
+
+            const handleMouseMove = (moveEvent) => {
+                const deltaX = moveEvent.clientX - dragStartPos.x;
+                const deltaY = moveEvent.clientY - dragStartPos.y;
+
+                if (!isDraggingComponent && (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5)) {
+                    isDraggingComponent = true;
+                    document.body.style.cursor = 'grabbing';
+                    wrapper.style.cursor = 'grabbing';
                 }
-            }
-        };
-        
-        const handleMouseUp = (e) => {
-            if (isDraggingComponent) {
-                saveState();
+
+                if (isDraggingComponent) {
+                    const newX = Math.max(0, componentStartPos.x + (deltaX / canvasScale));
+                    const newY = Math.max(0, componentStartPos.y + (deltaY / canvasScale));
+
+                    wrapper.style.left = newX + 'px';
+                    wrapper.style.top = newY + 'px';
+
+                    if (selectedComponent === wrapper) {
+                        const xInput = document.getElementById('prop-x');
+                        const yInput = document.getElementById('prop-y');
+                        if (xInput) xInput.value = Math.round(newX);
+                        if (yInput) yInput.value = Math.round(newY);
+                    }
+                }
+            };
+
+            const handleMouseUp = () => {
+                if (isDraggingComponent) {
+                    saveState();
+                }
+                document.body.style.cursor = '';
                 wrapper.style.cursor = '';
-            }
-            isDraggingComponent = false;
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-        
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-        
-        e.preventDefault();
-    });
-    
+                isDraggingComponent = false;
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+            };
+
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+        });
+    }
+
     // Redimensionamento
     const resizeHandle = wrapper.querySelector('.resize-handle');
     if (resizeHandle) {
@@ -622,6 +604,10 @@ function preventDesignModeInteraction(wrapper) {
             if (!isInExecutionMode()) {
                 e.preventDefault();
                 e.stopPropagation();
+
+                if (eventType === 'click') {
+                    selectComponent(wrapper);
+                }
                 
                 // Para checkboxes, prevenir mudança de estado
                 if (element.type === 'checkbox') {
