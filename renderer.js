@@ -1056,41 +1056,84 @@ function setupPropertyListeners() {
 
 function resolveValueInIDE(value) {
     if (typeof value !== 'string') {
-        return value; // Return non-strings as-is
+        return value;
     }
 
-    const referenceRegex = /<([a-zA-Z0-9_.]+)>/g;
-    
-    // Replace each found reference with its corresponding value
-    const resolvedValue = value.replace(referenceRegex, (match, reference) => {
-        // First, check if the reference is a component property
-        if (reference.includes('.')) {
-            const [componentId, propName] = reference.split('.');
+    const expressionRegex = /<([^>]+)>/g;
+
+    return value.replace(expressionRegex, (match, expression) => {
+        expression = expression.trim();
+        const arithmeticParts = expression.split(/([+\-*/])/);
+
+        if (arithmeticParts.length === 3) {
+            const lhsStr = arithmeticParts[0].trim();
+            const operator = arithmeticParts[1].trim();
+            const rhsStr = arithmeticParts[2].trim();
+
+            // Step 1: Resolve LHS
+            const lhsValue = resolveValueInIDE(`<${lhsStr}>`);
+            if (lhsValue === `<${lhsStr}>`) {
+                return match; // LHS reference not found
+            }
+
+            // Step 2: Resolve RHS (could be a literal number or another reference)
+            let rhsValue;
+            // Use a regex to strictly check if the string is a number, preventing misinterpretation of variable names.
+            if (/^-?\d+(\.\d+)?$/.test(rhsStr)) {
+                 rhsValue = parseFloat(rhsStr);
+            } else {
+                // If not a literal number, try to resolve as a reference
+                rhsValue = resolveValueInIDE(`<${rhsStr}>`);
+                if (rhsValue === `<${rhsStr}>`) {
+                    // If it's not a valid reference, and the operator is '+', treat as a literal string for concatenation.
+                    if (operator === '+') {
+                        return String(lhsValue) + rhsStr;
+                    }
+                    return match; // RHS is not a valid number or reference, and op is not '+'
+                }
+            }
+
+            // Step 3: Perform calculation
+            const numLhs = parseFloat(lhsValue);
+            const numRhs = parseFloat(rhsValue);
+
+            // If either operand is not a number, we can only do string concatenation with '+'
+            if (isNaN(numLhs) || isNaN(numRhs)) {
+                if (operator === '+') {
+                    return String(lhsValue) + String(rhsValue);
+                }
+                return match; // Cannot perform non-'+' operations on non-numbers
+            }
+
+            switch (operator) {
+                case '+': return numLhs + numRhs;
+                case '-': return numLhs - numRhs;
+                case '*': return numLhs * numRhs;
+                case '/': return numRhs !== 0 ? numLhs / numRhs : 'Infinity'; // Avoid division by zero
+                default: return match;
+            }
+        }
+
+        // --- Fallback to original logic for simple references ---
+        if (expression.includes('.')) {
+            const [componentId, propName] = expression.split('.');
             const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
             if (component) {
                 const element = component.firstElementChild;
                 if (element) {
-                    // Use the existing getPropertyValue to get the live value, which handles various property types
                     return getPropertyValue(element, propName);
                 }
             }
-        } else {
-            // If not a component property, check if it's a project variable
-            if (projectVariables.hasOwnProperty(reference)) {
-                const variable = projectVariables[reference];
-                // For objects/arrays, stringify them. For others, return the value.
-                if (variable.type === 'object' || variable.type === 'array') {
-                    return JSON.stringify(variable.value);
-                }
-                return variable.value;
+        } else if (projectVariables.hasOwnProperty(expression)) {
+            const variable = projectVariables[expression];
+            if (variable.type === 'object' || variable.type === 'array') {
+                return JSON.stringify(variable.value);
             }
+            return variable.value;
         }
-        
-        // If the reference cannot be resolved, return the original tag to indicate an issue
+
         return match;
     });
-
-    return resolvedValue;
 }
 
 function applyPropertyToComponent(component, property, value) {
@@ -1931,14 +1974,14 @@ function formatActionValue(value) {
         value = String(value || '');
     }
 
-    // Highlight variables/properties. Use a specific color.
-    let formattedValue = value.replace(/<([a-zA-Z0-9_.]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
+    // Highlight variables/properties/expressions. Use a specific color.
+    let formattedValue = value.replace(/<([^>]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
 
     // Truncate if necessary
     if (value.length > 50) {
         let truncated = value.substring(0, 47) + '...';
         // Re-highlight after truncating
-        return truncated.replace(/<([a-zA-Z0-9_.]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
+        return truncated.replace(/<([^>]+)>/g, '<span style="color: #c586c0; font-weight: bold;">&lt;$1&gt;</span>');
     }
 
     return formattedValue;
@@ -4249,8 +4292,8 @@ ${globalEvents.loop.actions.map(action => generateActionCode(action)).join('')}
 function generateActionCode(action) {
     let code = '';
     
-    // Função para escapar strings JavaScript
     function escapeJavaScript(str) {
+        if (typeof str !== 'string') return str;
         return str.replace(/\\/g, '\\\\')
                   .replace(/'/g, "\\'")
                   .replace(/"/g, '\\"')
@@ -4263,57 +4306,80 @@ function generateActionCode(action) {
         if (typeof value !== 'string') {
             return `'${escapeJavaScript(String(value || ''))}'`;
         }
-    
-        // Regex para encontrar todas as ocorrências de <VARIAVEL> ou <ID.PROPRIEDADE>
-        const referenceRegex = /<([a-zA-Z0-9_.]+)>/g;
-        const matches = [...value.matchAll(referenceRegex)];
-    
-        // Se não houver referências na string, retorna a string literal
-        if (matches.length === 0) {
-            return `'${escapeJavaScript(value)}'`;
-        }
-    
-        // Se a string for APENAS uma referência (ex: "<idade>" ou "<input_1.text>"), retorna o valor diretamente
-        if (matches.length === 1 && matches[0][0] === value) {
-            const ref = matches[0][1];
-            if (ref.includes('.')) {
-                const [id, prop] = ref.split('.');
-                return `getPropertyValue(getElementById('${id}'), '${prop}')`;
-            } else {
-                return `projectVariables['${ref}'].value`;
-            }
-        }
-    
-        // Se houver referências misturadas com texto, constrói uma string concatenada
-        let result = [];
+
+        const expressionRegex = /<([^>]+)>/g;
+        const parts = [];
         let lastIndex = 0;
-    
-        for (const match of matches) {
-            const ref = match[1];
+
+        for (const match of [...value.matchAll(expressionRegex)]) {
+            const expression = match[1].trim();
             const startIndex = match.index;
-    
-            // Adiciona o texto literal antes da referência
+
             if (startIndex > lastIndex) {
-                result.push(`'${escapeJavaScript(value.substring(lastIndex, startIndex))}'`);
+                parts.push(`'${escapeJavaScript(value.substring(lastIndex, startIndex))}'`);
             }
-    
-            // Adiciona a referência
-            if (ref.includes('.')) {
-                const [id, prop] = ref.split('.');
-                result.push(`getPropertyValue(getElementById('${id}'), '${prop}')`);
+
+            let resolvedExpressionCode;
+            const arithmeticParts = expression.split(/([+\-*/])/);
+
+            if (arithmeticParts.length === 3) {
+                const lhsStr = arithmeticParts[0].trim();
+                const operator = arithmeticParts[1].trim();
+                const rhsStr = arithmeticParts[2].trim();
+
+                const lhsCode = resolveValue(`<${lhsStr}>`);
+
+                let rhsCode;
+                // Use a more robust check for a string that is a numeric literal
+                if (/^-?\d+(\.\d+)?$/.test(rhsStr)) {
+                    rhsCode = parseFloat(rhsStr);
+                } else {
+                    rhsCode = resolveValue(`<${rhsStr}>`);
+                }
+
+                resolvedExpressionCode = `(() => {
+                    const a = ${lhsCode};
+                    const b = ${rhsCode};
+                    const numA = parseFloat(a);
+                    const numB = parseFloat(b);
+                    if ('${operator}' === '+' && (isNaN(numA) || isNaN(numB))) {
+                        return String(a) + String(b);
+                    }
+                    if (isNaN(numA) || isNaN(numB)) return NaN;
+                    switch ('${operator}') {
+                        case '+': return numA + numB;
+                        case '-': return numA - numB;
+                        case '*': return numA * numB;
+                        case '/': return numB !== 0 ? numA / numB : Infinity;
+                        default: return NaN;
+                    }
+                })()`;
+
             } else {
-                result.push(`projectVariables['${ref}'].value`);
+                if (expression.includes('.')) {
+                    const [id, prop] = expression.split('.');
+                    resolvedExpressionCode = `getPropertyValue(getElementById('${id}'), '${prop}')`;
+                } else {
+                    resolvedExpressionCode = `projectVariables['${expression}'].value`;
+                }
             }
-    
+            parts.push(resolvedExpressionCode);
             lastIndex = startIndex + match[0].length;
         }
-    
-        // Adiciona o texto literal restante após a última referência
+
         if (lastIndex < value.length) {
-            result.push(`'${escapeJavaScript(value.substring(lastIndex))}'`);
+            parts.push(`'${escapeJavaScript(value.substring(lastIndex))}'`);
         }
-    
-        return result.join(' + ');
+
+        if (parts.length === 0) {
+            return `'${escapeJavaScript(value)}'`;
+        }
+
+        if (parts.length === 1 && value.trim().startsWith('<') && value.trim().endsWith('>')) {
+            return parts[0];
+        }
+
+        return parts.join(' + ');
     }
     
     const resolvedValue = resolveValue(action.value || '');
@@ -4327,7 +4393,6 @@ function generateActionCode(action) {
             case 'console_log':
                 code = `    window.logToConsoleInPreview(${resolvedValue}, 'info');\n`;
                 break;
-
             case 'redirect_page':
                 code = `    window.location.href = ${resolvedValue};\n`;
                 break;
@@ -4357,11 +4422,11 @@ function generateActionCode(action) {
                 break;
             case 'toggle_checkbox':
                 if (action.value === 'check') {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]');\n    if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = true;\n`;
+                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = true;\n`;
                 } else if (action.value === 'uncheck') {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]');\n    if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = false;\n`;
+                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = false;\n`;
                 } else {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]');\n    if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = !checkbox_${action.targetId}.checked;\n`;
+                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = !checkbox_${action.targetId}.checked;\n`;
                 }
                 break;
             case 'move_element':
@@ -4371,13 +4436,9 @@ function generateActionCode(action) {
                 }
                 break;
             case 'show_hide':
-                if (action.value === 'show') {
-                    code = `    showElement('${action.targetId}');\n`;
-                } else if (action.value === 'hide') {
-                    code = `    hideElement('${action.targetId}');\n`;
-                } else {
-                    code = `    toggleElement('${action.targetId}');\n`;
-                }
+                if (action.value === 'show') code = `    showElement('${action.targetId}');\n`;
+                else if (action.value === 'hide') code = `    hideElement('${action.targetId}');\n`;
+                else code = `    toggleElement('${action.targetId}');\n`;
                 break;
             case 'clear_value':
                 code = `    clearValue('${action.targetId}');\n`;
@@ -4386,11 +4447,8 @@ function generateActionCode(action) {
                 code = `    focusElement('${action.targetId}');\n`;
                 break;
             case 'disable_enable':
-                if (action.value === 'enable') {
-                    code = `    enableElement('${action.targetId}');\n`;
-                } else if (action.value === 'disable') {
-                    code = `    disableElement('${action.targetId}');\n`;
-                }
+                if (action.value === 'enable') code = `    enableElement('${action.targetId}');\n`;
+                else if (action.value === 'disable') code = `    disableElement('${action.targetId}');\n`;
                 break;
         }
     }
