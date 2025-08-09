@@ -1407,3 +1407,53 @@ button[style*="font-size: 12px"]:hover {
 .designer-component.selected .move-handle {
     opacity: 1;
 }
+
+/* Action Item styles */
+.action-item {
+    background: #3c3c3c;
+    border: 1px solid #5a5a5a;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    padding: 12px;
+    cursor: move;
+    transition: all 0.2s;
+}
+.action-item:hover {
+    background: #4a4a4a;
+}
+.action-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.action-title {
+    font-weight: bold;
+    color: #d4d4d4;
+}
+.action-buttons {
+    display: flex;
+    gap: 5px;
+}
+.action-details {
+    font-size: 12px;
+    color: #cccccc;
+    margin-bottom: 8px;
+}
+.condition-status {
+    font-size: 11px;
+    color: #9d9d9d;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #4a4a4a;
+}
+.condition-status.configured {
+    color: #569cd6;
+}
+.btn-small {
+    padding: 2px 6px;
+    font-size: 11px;
+}
+.btn-danger {
+    background-color: #dc3545;
+}

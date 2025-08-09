@@ -1855,6 +1855,118 @@ function showManipulateVariableModal(callback) {
     }
 }
 
+function showConditionEditorModal(existingCondition, callback) {
+    const modalId = 'condition-editor-modal';
+    if (document.getElementById(modalId)) return;
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.style.zIndex = '10002'; // On top of event editor
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.maxWidth = '600px';
+    modalContent.style.height = 'auto';
+
+    // Populate targets for the dropdown
+    let targetsHTML = '<option value="">Selecione um alvo...</option>';
+    // Add variables
+    Object.keys(projectVariables).forEach(name => {
+        targetsHTML += `<option value="var:${name}">${name} (Variável)</option>`;
+    });
+    // Add component properties
+    const allComponents = document.querySelectorAll('.designer-component');
+    allComponents.forEach(component => {
+        const componentId = component.dataset.componentId;
+        const componentType = component.dataset.componentType;
+        const componentDef = componentLibrary.find(c => c.type === componentType);
+        if (componentDef) {
+            const props = Object.keys(componentDef.defaultProps);
+            if (['input', 'textarea', 'select'].includes(componentType)) props.push('value');
+            if (componentType === 'checkbox') props.push('checked');
+
+            props.forEach(prop => {
+                targetsHTML += `<option value="prop:${componentId}.${prop}">${componentId}.${prop} (Propriedade)</option>`;
+            });
+        }
+    });
+
+
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Editor de Condição</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="property-item">
+                <label class="property-label">Alvo da Condição</label>
+                <select id="modal-cond-target" class="property-input">
+                    ${targetsHTML}
+                </select>
+            </div>
+            <div class="property-item">
+                <label class="property-label">Operador</label>
+                <select id="modal-cond-operator" class="property-input">
+                    <option value="==">Igual (==)</option>
+                    <option value="!=">Diferente (!=)</option>
+                    <option value=">">Maior que (>)</option>
+                    <option value="<">Menor que (<)</option>
+                    <option value=">=">Maior ou igual que (>=)</option>
+                    <option value="<=">Menor ou igual que (<=)</option>
+                    <option value="contains">Contém</option>
+                    <option value="not_contains">Não contém</option>
+                </select>
+            </div>
+            <div class="property-item">
+                <label class="property-label">Valor a Comparar</label>
+                <input type="text" id="modal-cond-value" class="property-input">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Cancelar</button>
+            <button id="btn-confirm-condition" class="btn primary">Confirmar</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+
+    // Pre-fill if editing
+    if (existingCondition) {
+        document.getElementById('modal-cond-target').value = existingCondition.target || '';
+        document.getElementById('modal-cond-operator').value = existingCondition.operator || '==';
+        document.getElementById('modal-cond-value').value = existingCondition.value || '';
+    }
+
+    const valueInput = document.getElementById('modal-cond-value');
+    attachSuggestionListener(valueInput);
+
+    const closeModal = () => {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.remove();
+        }
+    };
+
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
+
+    document.getElementById('btn-confirm-condition').addEventListener('click', () => {
+        const target = document.getElementById('modal-cond-target').value;
+        const operator = document.getElementById('modal-cond-operator').value;
+        const value = document.getElementById('modal-cond-value').value;
+
+        if (target && operator) {
+            if (callback) {
+                callback({ target, operator, value });
+            }
+        }
+        closeModal();
+    });
+}
+
 // Selecionar evento para edição
 function selectEventForEditing(eventName, componentType, componentId) {
     const isGlobal = componentType === 'global';
@@ -1959,7 +2071,7 @@ function loadActionsEditor(eventName, componentType, componentId) {
     document.getElementById('add-action').addEventListener('click', showActionSelector);
     
     // Configurar listeners para ações existentes
-    setupActionListeners();
+    setupActionListeners(eventName, componentType, componentId, currentActions);
 
     // Drag and Drop para reordenar ações
     const actionsList = document.getElementById('actions-list');
@@ -2038,6 +2150,7 @@ function formatActionValue(value) {
 // Renderizar item de ação
 function renderActionItem(action, index) {
     const escapedValue = (action.value || '').replace(/"/g, '&quot;');
+    const escapedCondition = action.condition ? JSON.stringify(action.condition).replace(/'/g, "\\'") : '';
     let actionTitle = '';
     let actionDetails = '';
 
@@ -2113,8 +2226,23 @@ function renderActionItem(action, index) {
             break;
     }
 
+    let conditionDetails = '';
+    let conditionButtonClass = '';
+    if (action.condition && action.condition.target) {
+        const { target, operator, value } = action.condition;
+        // Sanitize the operator to prevent injection issues, although it comes from a select menu
+        const safeOperator = ['==', '!=', '>', '<', '>=', '<=', 'contains', 'not_contains'].includes(operator) ? operator : '==';
+        const targetName = target.startsWith('var:') ? target.substring(4) : target.substring(5);
+        conditionDetails = `
+            <div style="font-size: 11px; color: #569cd6; margin-top: 5px; padding-top: 5px; border-top: 1px solid #4a4a4a;">
+                <strong>Condição:</strong> Se ${targetName} ${safeOperator} ${highlight(value)}
+            </div>
+        `;
+        conditionButtonClass = 'active';
+    }
+
     return `
-        <div class="action-item" draggable="true" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${escapedValue}" style="
+        <div class="action-item" draggable="true" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${escapedValue}" data-action-condition='${escapedCondition}' style="
             padding: 12px;
             margin-bottom: 8px;
             border: 1px solid #5a5a5a;
@@ -2130,10 +2258,12 @@ function renderActionItem(action, index) {
                 <div style="font-size: 12px; color: #cccccc;">
                    ${actionDetails}
                 </div>
+                ${conditionDetails}
             </div>
-            <div>
+            <div style="display: flex; gap: 5px;">
+                <button class="condition-action btn ${conditionButtonClass}" data-index="${index}">Condição</button>
                 <button class="edit-action btn" data-index="${index}">Editar</button>
-                <button class="remove-action btn" data-index="${index}" style="background-color: #dc3545; margin-left: 5px;">Remover</button>
+                <button class="remove-action btn" data-index="${index}" style="background-color: #dc3545;">Remover</button>
             </div>
         </div>
     `;
@@ -2175,7 +2305,7 @@ function showActionSelector(actionToEdit = null) {
     // Remover listener antigo para evitar duplicação
     const newConfirmButton = confirmButton.cloneNode(true);
     confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
-    newConfirmButton.addEventListener('click', saveAction);
+    newConfirmButton.addEventListener('click', () => saveAction(actionToEdit));
 }
 
 // Esconder seletor de ação
@@ -3723,7 +3853,7 @@ function getAllComponentsForSelection(currentComponentId) {
 }
 
 // Configurar listeners para ações existentes
-function setupActionListeners() {
+function setupActionListeners(eventName, componentType, componentId, currentActions) {
     // Listener para remover ação
     document.querySelectorAll('.remove-action').forEach(button => {
         button.addEventListener('click', (e) => {
@@ -3736,25 +3866,49 @@ function setupActionListeners() {
     document.querySelectorAll('.edit-action').forEach(button => {
         button.addEventListener('click', (e) => {
             const index = parseInt(e.target.dataset.index);
-            editAction(index);
+            editAction(index, currentActions);
+        });
+    });
+
+    // Listener para o botão de condição
+    document.querySelectorAll('.condition-action').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.index, 10);
+            const action = currentActions[index];
+
+            if (!action) {
+                console.error("Ação não encontrada para o índice:", index);
+                return;
+            }
+
+            showConditionEditorModal(action.condition, (newCondition) => {
+                // Se o usuário limpou a condição, o objeto pode estar vazio.
+                if (newCondition && newCondition.target) {
+                    action.condition = newCondition;
+                } else {
+                    delete action.condition; // Remove a propriedade de condição
+                }
+                
+                // Re-render the list to show the changes
+                loadActionsEditor(eventName, componentType, componentId);
+                saveState(); // Salva o estado para undo/redo
+            });
         });
     });
 }
 
 // Editar uma ação existente
-function editAction(index) {
-    const actionItem = document.querySelector(`.action-item[data-index="${index}"]`);
-    if (!actionItem) return;
+function editAction(index, currentActions) {
+    const actionToEdit = currentActions[index];
+    if (!actionToEdit) {
+        console.error("Ação para editar não encontrada no índice:", index);
+        return;
+    }
 
     editingActionIndex = index; // Marcar que estamos editando
 
-    const actionData = {
-        targetId: actionItem.dataset.targetId,
-        actionType: actionItem.dataset.actionType,
-        value: actionItem.dataset.actionValue
-    };
-
-    showActionSelector(actionData); // Passar dados para o seletor
+    // Passar o objeto de ação inteiro, que inclui a condição
+    showActionSelector(actionToEdit);
 }
 
 // Remover ação
@@ -3779,7 +3933,7 @@ function removeAction(index) {
 }
 
 // Adicionar ou atualizar uma ação
-function saveAction() {
+function saveAction(originalAction = null) {
     const targetElement = document.getElementById('target-element').value;
     const actionType = document.getElementById('action-type').value;
     let actionValue = '';
@@ -3789,8 +3943,6 @@ function saveAction() {
         const yValue = document.getElementById('action-value-y')?.value || '0';
         actionValue = `${xValue},${yValue}`;
     } else {
-        // Para 'change_style', o valor já é um JSON string no input escondido.
-        // Para outras ações, é um valor simples.
         actionValue = document.getElementById('action-value')?.value || '';
     }
     
@@ -3799,84 +3951,36 @@ function saveAction() {
         return;
     }
     
-    // Obter nome da ação
-    let actionName = 'Ação desconhecida';
-    const allActions = [
-        ...eventSystem.availableActions.text,
-        ...eventSystem.availableActions.visual,
-        ...eventSystem.availableActions.input,
-        ...eventSystem.availableActions.checkbox,
-        ...eventSystem.availableActions.global
-    ];
-    
-    const actionDef = allActions.find(a => a.id === actionType);
-    if (actionDef) {
-        actionName = actionDef.name;
-    }
-    
-    // Criar objeto da ação
     const newAction = {
         targetId: targetElement === 'global' ? null : targetElement,
         actionType: actionType,
-        value: actionValue
+        value: actionValue,
+        condition: originalAction ? originalAction.condition : undefined
     };
     
-    // Se estiver editando, atualiza o item existente. Senão, adiciona um novo.
-    const actionsList = document.getElementById('actions-list');
-    if (editingActionIndex !== null) {
-        const actionItem = actionsList.querySelector(`.action-item[data-index="${editingActionIndex}"]`);
-        if (actionItem) {
-            // Atualizar os dados do dataset
-            actionItem.dataset.targetId = newAction.targetId || 'global';
-            actionItem.dataset.actionType = newAction.actionType;
-            actionItem.dataset.actionValue = newAction.value;
+    const isGlobal = !selectedComponent;
+    const componentId = isGlobal ? 'global' : selectedComponent.dataset.componentId;
+    const componentType = isGlobal ? 'global' : selectedComponent.dataset.componentType;
+    const eventName = currentEditingEvent;
 
-            // Atualizar o HTML interno
-            actionItem.innerHTML = renderActionItem(newAction, editingActionIndex).match(/<div class="action-item"[^>]*>([\s\S]*)<\/div>/)[1];
-            
-            // Reanexar listeners para os botões dentro do item atualizado
-            setupActionListeners();
-        }
+    let actions;
+    if (isGlobal) {
+        actions = (eventName === 'loop') ? globalEvents[eventName].actions : globalEvents[eventName];
     } else {
-        // Adicionar à lista visual
-        const currentIndex = actionsList.querySelectorAll('.action-item').length;
-        
-        const actionHTML = renderActionItem(newAction, currentIndex);
-        actionsList.insertAdjacentHTML('beforeend', actionHTML);
-        
-        // Reanexar todos os listeners para garantir que os novos botões funcionem
-        setupActionListeners();
+        if (!componentEvents[componentId]) componentEvents[componentId] = {};
+        if (!componentEvents[componentId][eventName]) componentEvents[componentId][eventName] = [];
+        actions = componentEvents[componentId][eventName];
+    }
+
+    if (editingActionIndex !== null) {
+        if (actions) actions[editingActionIndex] = newAction;
+    } else {
+        if (actions) actions.push(newAction);
     }
     
-    // Limpar seletor
-    hideActionSelector();
-    document.getElementById('target-element').value = '';
-    document.getElementById('action-type').value = '';
-    if (document.getElementById('action-value')) {
-        document.getElementById('action-value').value = '';
-    }
-    if (document.getElementById('action-value-x')) {
-        document.getElementById('action-value-x').value = '';
-    }
-    if (document.getElementById('action-value-y')) {
-        document.getElementById('action-value-y').value = '';
-    }
-    if (document.getElementById('action-value-style')) {
-        document.getElementById('action-value-style').value = 'solid';
-    }
-    if (document.getElementById('action-value-width')) {
-        document.getElementById('action-value-width').value = '';
-    }
-    if (document.getElementById('action-value-color')) {
-        document.getElementById('action-value-color').value = '#000000';
-    }
-    if (document.getElementById('action-value-radius')) {
-        document.getElementById('action-value-radius').value = '';
-    }
-    if (document.getElementById('action-value-height')) {
-        document.getElementById('action-value-height').value = '';
-    }
+    loadActionsEditor(eventName, componentType, componentId);
     saveState();
+    hideActionSelector();
 }
 
 // Variável global para armazenar o evento atualmente sendo editado
@@ -3960,11 +4064,23 @@ function saveCurrentEventActions(componentId, eventName) {
     const actions = [];
     
     actionItems.forEach(actionItem => {
+        const conditionStr = actionItem.dataset.actionCondition;
+        let condition = null;
+        // O valor pode ser 'undefined' se o atributo não existir.
+        if (conditionStr && conditionStr !== 'undefined') {
+            try {
+                condition = JSON.parse(conditionStr);
+            } catch (e) {
+                console.error('Falha ao analisar a condição da ação:', e);
+            }
+        }
+
         const actionData = {
             targetId: actionItem.dataset.targetId === 'global' ? null : actionItem.dataset.targetId,
             actionType: actionItem.dataset.actionType,
             actionName: actionItem.querySelector('div:first-child').textContent,
-            value: actionItem.dataset.actionValue
+            value: actionItem.dataset.actionValue,
+            condition: condition // Adicionar a condição ao objeto da ação
         };
         actions.push(actionData);
     });
@@ -3989,11 +4105,22 @@ function saveCurrentGlobalEventActions(eventName) {
     const actions = [];
 
     actionItems.forEach(actionItem => {
+        const conditionStr = actionItem.dataset.actionCondition;
+        let condition = null;
+        if (conditionStr && conditionStr !== 'undefined') {
+            try {
+                condition = JSON.parse(conditionStr);
+            } catch (e) {
+                console.error('Falha ao analisar a condição da ação:', e);
+            }
+        }
+
         const actionData = {
             targetId: actionItem.dataset.targetId === 'global' ? null : actionItem.dataset.targetId,
             actionType: actionItem.dataset.actionType,
             actionName: actionItem.querySelector('div:first-child').textContent,
-            value: actionItem.dataset.actionValue
+            value: actionItem.dataset.actionValue,
+            condition: condition // Adicionar a condição ao objeto da ação
         };
         actions.push(actionData);
     });
@@ -4338,7 +4465,8 @@ ${globalEvents.loop.actions.map(action => generateActionCode(action)).join('')}
 
 // Gerar código para uma ação específica
 function generateActionCode(action) {
-    let code = '';
+    // Helper functions (resolveValue, generateCodeForExpression) are defined here,
+    // just like in the original function, so they are available in this scope.
 
     /**
      * Generates a JavaScript code string for a given value, which can be a literal,
@@ -4354,28 +4482,21 @@ function generateActionCode(action) {
             return `'${value.replace(/'/g, "\\'")}'`;
         }
 
-        // This function processes the entire value string, including parts outside of <...>
         const expressionRegex = /<([^>]+)>/g;
         let result = [];
         let lastIndex = 0;
         let match;
 
         while ((match = expressionRegex.exec(value)) !== null) {
-            // Push preceding text if any
             if (match.index > lastIndex) {
                 result.push(`'${value.substring(lastIndex, match.index).replace(/'/g, "\\'")}'`);
             }
-
             const expression = match[1].trim();
-
-            // Generate code for the expression inside <...>
             const expressionCode = generateCodeForExpression(expression);
             result.push(`(${expressionCode})`);
-
             lastIndex = match.index + match[0].length;
         }
 
-        // Push remaining text if any
         if (lastIndex < value.length) {
             result.push(`'${value.substring(lastIndex).replace(/'/g, "\\'")}'`);
         }
@@ -4385,13 +4506,11 @@ function generateActionCode(action) {
 
     /**
      * Generates a self-contained JavaScript code string for a single expression
-     * found inside <...>. It uses a Shunting-yard based approach to handle
-     * operator precedence.
+     * found inside <...>.
      * @param {string} expression The expression string (e.g., "var1 + var2 / 2").
      * @returns {string} A string of JavaScript code.
      */
     function generateCodeForExpression(expression) {
-        // If it's a simple reference, handle it directly.
         if (!/[-+*/()]/.test(expression)) {
             if (expression.includes('.')) {
                 const [id, prop] = expression.split('.');
@@ -4400,44 +4519,37 @@ function generateActionCode(action) {
             return `projectVariables['${expression}'].value`;
         }
 
-        // For complex arithmetic, parse and build an expression tree as a string.
         const precedence = { '+': 1, '-': 1, '*': 2, '/': 2 };
         const operators = '+-*/()';
         const tokenize = (expr) => expr.replace(/([+\-*/()])/g, ' $1 ').trim().split(/\s+/);
         const tokens = tokenize(expression);
-
-        const outputQueue = [];
-        const operatorStack = [];
+        const outputQueue = [], operatorStack = [];
 
         for (const token of tokens) {
             if (!isNaN(parseFloat(token)) && isFinite(token)) {
-                outputQueue.push(token); // It's a number literal
+                outputQueue.push(token);
             } else if (operators.includes(token)) {
-                if (token === '(') {
-                    operatorStack.push(token);
-                } else if (token === ')') {
+                if (token === '(') operatorStack.push(token);
+                else if (token === ')') {
                     while (operatorStack.length && operatorStack[operatorStack.length - 1] !== '(') {
                         outputQueue.push(operatorStack.pop());
                     }
-                    operatorStack.pop(); // Pop '('
+                    operatorStack.pop();
                 } else {
                     while (operatorStack.length && precedence[operatorStack[operatorStack.length - 1]] >= precedence[token] && operatorStack[operatorStack.length - 1] !== '(') {
                         outputQueue.push(operatorStack.pop());
                     }
                     operatorStack.push(token);
                 }
-            } else { // It's an identifier
+            } else {
                 outputQueue.push(token);
             }
         }
-        while (operatorStack.length > 0) {
-            outputQueue.push(operatorStack.pop());
-        }
+        while (operatorStack.length > 0) outputQueue.push(operatorStack.pop());
 
-        // Build JS code from RPN queue
         const codeStack = [];
         const resolveIdentifierCode = (identifier) => {
-             if (identifier.includes('.')) {
+            if (identifier.includes('.')) {
                 const [id, prop] = identifier.split('.');
                 return `parseFloat(getPropertyValue(getElementById('${id}'), '${prop}'))`;
             }
@@ -4446,7 +4558,6 @@ function generateActionCode(action) {
 
         for (const token of outputQueue) {
             if (!operators.includes(token)) {
-                 // It's a number or an identifier
                 codeStack.push(!isNaN(parseFloat(token)) && isFinite(token) ? token : resolveIdentifierCode(token));
             } else {
                 const b = codeStack.pop();
@@ -4456,27 +4567,28 @@ function generateActionCode(action) {
         }
         return codeStack[0] || '""';
     }
-    
+
+    let actionLogic = '';
     const resolvedValue = resolveValue(action.value || '');
-    
+
     if (!action.targetId) {
         // Ação global
         switch (action.actionType) {
             case 'show_alert':
-                code = `    alert(${resolvedValue});\n`;
+                actionLogic = `    alert(${resolvedValue});\n`;
                 break;
             case 'console_log':
-                code = `    window.logToConsoleInPreview(${resolvedValue}, 'info');\n`;
+                actionLogic = `    window.logToConsoleInPreview(${resolvedValue}, 'info');\n`;
                 break;
             case 'redirect_page':
-                code = `    window.location.href = ${resolvedValue};\n`;
+                actionLogic = `    window.location.href = ${resolvedValue};\n`;
                 break;
             case 'manipulate_variable':
                 if (action.value && action.value.includes(',')) {
                     const [varName, operation, ...valueParts] = action.value.split(',');
                     const value = valueParts.join(',');
                     const resolvedManipulationValue = resolveValue(value);
-                    code = `    manipulateVariable('${varName}', '${operation}', ${resolvedManipulationValue});\n`;
+                    actionLogic = `    manipulateVariable('${varName}', '${operation}', ${resolvedManipulationValue});\n`;
                 }
                 break;
         }
@@ -4484,51 +4596,88 @@ function generateActionCode(action) {
         // Ação em elemento específico
         switch (action.actionType) {
             case 'change_style':
-                code = `    applyStyles('${action.targetId}', ${resolvedValue});\n`;
+                actionLogic = `    applyStyles('${action.targetId}', ${resolvedValue});\n`;
                 break;
             case 'change_text':
-                code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
-                break;
             case 'change_value':
-                code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
-                break;
             case 'change_checkbox_text':
-                code = `    changeText('${action.targetId}', ${resolvedValue});\n`;
+                actionLogic = `    changeText('${action.targetId}', ${resolvedValue});\n`;
                 break;
             case 'toggle_checkbox':
                 if (action.value === 'check') {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = true;\n`;
+                    actionLogic = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = true;\n`;
                 } else if (action.value === 'uncheck') {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = false;\n`;
+                    actionLogic = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = false;\n`;
                 } else {
-                    code = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = !checkbox_${action.targetId}.checked;\n`;
+                    actionLogic = `    const checkbox_${action.targetId} = getElementById('${action.targetId}').querySelector('input[type="checkbox"]'); if (checkbox_${action.targetId}) checkbox_${action.targetId}.checked = !checkbox_${action.targetId}.checked;\n`;
                 }
                 break;
             case 'move_element':
                 if (action.value && action.value.includes(',')) {
                     const [x, y] = action.value.split(',');
-                    code = `    moveElement('${action.targetId}', ${x}, ${y});\n`;
+                    actionLogic = `    moveElement('${action.targetId}', ${x}, ${y});\n`;
                 }
                 break;
             case 'show_hide':
-                if (action.value === 'show') code = `    showElement('${action.targetId}');\n`;
-                else if (action.value === 'hide') code = `    hideElement('${action.targetId}');\n`;
-                else code = `    toggleElement('${action.targetId}');\n`;
+                if (action.value === 'show') actionLogic = `    showElement('${action.targetId}');\n`;
+                else if (action.value === 'hide') actionLogic = `    hideElement('${action.targetId}');\n`;
+                else actionLogic = `    toggleElement('${action.targetId}');\n`;
                 break;
             case 'clear_value':
-                code = `    clearValue('${action.targetId}');\n`;
+                actionLogic = `    clearValue('${action.targetId}');\n`;
                 break;
             case 'focus_element':
-                code = `    focusElement('${action.targetId}');\n`;
+                actionLogic = `    focusElement('${action.targetId}');\n`;
                 break;
             case 'disable_enable':
-                if (action.value === 'enable') code = `    enableElement('${action.targetId}');\n`;
-                else if (action.value === 'disable') code = `    disableElement('${action.targetId}');\n`;
+                if (action.value === 'enable') actionLogic = `    enableElement('${action.targetId}');\n`;
+                else if (action.value === 'disable') actionLogic = `    disableElement('${action.targetId}');\n`;
                 break;
         }
     }
-    
-    return code;
+
+    // Se não houver lógica de ação, não retorne nada.
+    if (!actionLogic) {
+        return '';
+    }
+
+    // Envolver a lógica da ação em uma verificação de condição, se houver uma.
+    if (action.condition && action.condition.target) {
+        const { target, operator, value } = action.condition;
+        let targetValueCode = '';
+
+        if (target.startsWith('var:')) {
+            const varName = target.substring(4);
+            targetValueCode = `projectVariables['${varName}'].value`;
+        } else if (target.startsWith('prop:')) {
+            const [componentId, propName] = target.substring(5).split('.');
+            targetValueCode = `getPropertyValue(getElementById('${componentId}'), '${propName}')`;
+        }
+
+        if (targetValueCode) {
+            const comparisonValueCode = resolveValue(value || '');
+            
+            const numericOperators = ['>', '<', '>=', '<='];
+            const isNumericComparison = numericOperators.includes(operator);
+
+            const leftOperand = isNumericComparison ? `parseFloat(${targetValueCode})` : `String(${targetValueCode})`;
+            const rightOperand = isNumericComparison ? `parseFloat(${comparisonValueCode})` : `String(${comparisonValueCode})`;
+            
+            let conditionExpression;
+            if (operator === 'contains') {
+                conditionExpression = `${leftOperand}.includes(${rightOperand})`;
+            } else if (operator === 'not_contains') {
+                conditionExpression = `!${leftOperand}.includes(${rightOperand})`;
+            } else {
+                conditionExpression = `${leftOperand} ${operator} ${rightOperand}`;
+            }
+            
+            const indentedActionLogic = actionLogic.trim().split('\n').map(line => `        ${line}`).join('\n');
+            return `    if (${conditionExpression}) {\n${indentedActionLogic}\n    }\n`;
+        }
+    }
+
+    return actionLogic;
 }
 
 // Modal de seleção de propriedade
