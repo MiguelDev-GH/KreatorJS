@@ -492,7 +492,7 @@ function duplicateComponent(sourceComponent) {
 
     // Extrai as propriedades atuais (incluindo as não padrão) do componente de origem
     const properties = extractComponentProperties(sourceComponent);
-
+    
     // Cria o novo componente com as propriedades extraídas e uma posição deslocada
     createComponent(type, currentX + offsetX, currentY + offsetY, properties);
 
@@ -627,6 +627,11 @@ function setupComponentEvents(wrapper) {
             },
             { separator: true },
             {
+                label: 'Alterar ID',
+                shortcut: '',
+                action: () => enableIdEditing()
+            },
+            {
                 label: 'Trazer para Frente',
                 shortcut: 'Ctrl+Up',
                 action: () => console.log('Trazer para Frente') // Ação a ser implementada
@@ -722,6 +727,141 @@ function selectComponent(component) {
     renderComponentTree();
 }
 
+let originalComponentId = null;
+
+function enableIdEditing() {
+    const idInput = document.getElementById('prop-id');
+    const saveBtn = document.getElementById('btn-save-id');
+    const cancelBtn = document.getElementById('btn-cancel-id');
+
+    if (!idInput || !selectedComponent) return;
+
+    originalComponentId = idInput.value;
+
+    idInput.readOnly = false;
+    idInput.style.backgroundColor = '#3c3c3c';
+    idInput.style.border = '1px solid #0099ff';
+    saveBtn.style.display = 'inline-block';
+    cancelBtn.style.display = 'inline-block';
+
+    idInput.focus();
+    idInput.select();
+}
+
+function disableIdEditing(revert = false) {
+    const idInput = document.getElementById('prop-id');
+    const saveBtn = document.getElementById('btn-save-id');
+    const cancelBtn = document.getElementById('btn-cancel-id');
+
+    if (!idInput) return;
+
+    if (revert && originalComponentId) {
+        idInput.value = originalComponentId;
+    }
+
+    idInput.readOnly = true;
+    idInput.style.backgroundColor = '';
+    idInput.style.border = '';
+    saveBtn.style.display = 'none';
+    cancelBtn.style.display = 'none';
+
+    originalComponentId = null;
+}
+
+function updateReferences(oldId, newId) {
+    // Re-create regex to avoid state issues in loops
+    const buildRegex = () => new RegExp(`<${oldId}(\\.|>)`, 'g');
+
+    // 1. Update componentEvents object
+    if (componentEvents[oldId]) {
+        componentEvents[newId] = componentEvents[oldId];
+        delete componentEvents[oldId];
+    }
+
+    const updateAction = (action) => {
+        if (action.targetId === oldId) {
+            action.targetId = newId;
+        }
+        if (typeof action.value === 'string') {
+            action.value = action.value.replace(buildRegex(), `<${newId}$1`);
+        }
+        if (action.condition && action.condition.target && action.condition.target.startsWith(`prop:${oldId}.`)) {
+            action.condition.target = action.condition.target.replace(`prop:${oldId}.`, `prop:${newId}.`);
+        }
+    };
+
+    for (const componentId in componentEvents) {
+        for (const eventName in componentEvents[componentId]) {
+            componentEvents[componentId][eventName].forEach(updateAction);
+        }
+    }
+    
+    // Also check globalEvents
+    for (const eventName in globalEvents) {
+        const eventData = globalEvents[eventName];
+        const actions = Array.isArray(eventData) ? eventData : (eventData.actions || []);
+        actions.forEach(updateAction);
+    }
+
+    // 2. Update all components' raw properties in the DOM
+    const allComponents = document.querySelectorAll('.designer-component');
+    allComponents.forEach(comp => {
+        for (const key in comp.dataset) {
+            if (key.startsWith('rawProp')) {
+                const rawValue = comp.dataset[key];
+                if (typeof rawValue === 'string' && buildRegex().test(rawValue)) {
+                    comp.dataset[key] = rawValue.replace(buildRegex(), `<${newId}$1`);
+                }
+            }
+        }
+    });
+    
+    // After updating the raw props, we need to re-apply them all
+    updateAllDynamicProperties();
+}
+
+
+function updateComponentId(component, newId) {
+    if (!component) return;
+    const oldId = component.dataset.componentId;
+
+    // 1. Validation
+    if (newId === oldId) {
+        disableIdEditing();
+        return; // No change
+    }
+
+    if (!newId) {
+        showCustomAlert('Erro de Validação', 'O ID não pode ser vazio.');
+        return;
+    }
+
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newId)) {
+        showCustomAlert('Erro de Validação', 'ID inválido. Use apenas letras, números e underscores, e não comece com um número.');
+        return;
+    }
+
+    const existingComponent = document.querySelector(`.designer-component[data-component-id="${newId}"]`);
+    if (existingComponent) {
+        showCustomAlert('Erro de Validação', 'Este ID já está em uso por outro componente.');
+        return;
+    }
+
+    logToConsole(`Atualizando ID de '${oldId}' para '${newId}'...`, 'info');
+
+    // 2. Update all references in the data model and DOM datasets
+    updateReferences(oldId, newId);
+
+    // 3. Update the ID on the component element itself
+    component.dataset.componentId = newId;
+
+    // 4. Refresh UI and save state
+    renderComponentTree();
+    populateObjectInspector(component); // Re-populate to reflect the change
+    saveState();
+    logToConsole(`ID de '${oldId}' foi atualizado para '${newId}' com sucesso!`, 'success');
+}
+
 // Popular inspetor de objetos
 function populateObjectInspector(component) {
     const inspector = document.getElementById("object-inspector");
@@ -745,7 +885,11 @@ function populateObjectInspector(component) {
             <div class="property-group-title">Geral</div>
             <div class="property-item">
                 <label class="property-label">ID</label>
-                <input type="text" class="property-input" value="${component.dataset.componentId}" readonly>
+                <div class="id-input-wrapper" style="display: flex; align-items: center; gap: 5px;">
+                    <input type="text" class="property-input" id="prop-id" value="${component.dataset.componentId}" readonly style="flex: 1;">
+                    <button id="btn-save-id" class="btn" style="display: none;">Salvar</button>
+                    <button id="btn-cancel-id" class="btn" style="display: none;">Cancelar</button>
+                </div>
             </div>
             <div class="property-item">
                 <label class="property-label">Tipo</label>
@@ -782,6 +926,24 @@ function populateObjectInspector(component) {
     
     // Configurar listeners das propriedades
     setupPropertyListeners();
+
+    // Listeners for ID editing
+    const saveIdBtn = document.getElementById('btn-save-id');
+    const cancelIdBtn = document.getElementById('btn-cancel-id');
+
+    if (saveIdBtn && cancelIdBtn) {
+        saveIdBtn.onclick = () => {
+            const idInput = document.getElementById('prop-id');
+            if (idInput && selectedComponent) {
+                const newId = idInput.value.trim();
+                updateComponentId(selectedComponent, newId);
+            }
+        };
+
+        cancelIdBtn.onclick = () => {
+            disableIdEditing(true); // Reverte para o valor original
+        };
+    }
 }
 
 // Helper function to generate a composite color input (text + color picker)
@@ -3523,7 +3685,7 @@ function showContextMenu(e, items) {
         } else {
             const button = document.createElement('button');
             button.className = 'context-menu-item';
-
+            
             const label = document.createElement('span');
             label.textContent = item.label;
             button.appendChild(label);
