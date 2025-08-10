@@ -5367,17 +5367,24 @@ function setupVariableButtonListener() {
 
 function addVariable() {
     const nameInput = document.getElementById('modal-var-name');
-    const valueInput = document.getElementById('modal-var-value');
     const typeInput = document.getElementById('modal-var-type');
+    const textValueInput = document.getElementById('modal-var-value');
+    const booleanValueInput = document.getElementById('modal-var-value-boolean');
 
-    if (!nameInput || !valueInput || !typeInput) {
+    if (!nameInput || !typeInput || !textValueInput || !booleanValueInput) {
         logToConsole('Erro: Não foi possível encontrar os campos do modal.', 'error');
         return;
     }
 
     const name = nameInput.value.trim();
-    const value = valueInput.value;
     const type = typeInput.value;
+    let value;
+
+    if (type === 'boolean') {
+        value = booleanValueInput.value;
+    } else {
+        value = textValueInput.value;
+    }
 
     if (!name || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
         showCustomAlert('Erro de Validação', 'Nome de variável inválido. Use apenas letras, números e underscores, e não comece com um número.');
@@ -5423,7 +5430,7 @@ function addVariable() {
     
     // Limpar campos para a próxima variável
     nameInput.value = '';
-    valueInput.value = '';
+    textValueInput.value = '';
     closeAddVariableModal()
 }
 
@@ -5494,9 +5501,13 @@ function showAddVariableModal() {
                 <label class="property-label">Nome da Variável</label>
                 <input type="text" id="modal-var-name" class="property-input">
             </div>
-            <div class="property-item">
+            <div class="property-item" id="value-input-container">
                 <label class="property-label">Valor Inicial</label>
                 <input type="text" id="modal-var-value" class="property-input">
+                <select id="modal-var-value-boolean" class="property-input" style="display: none;">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                </select>
                 <div id="variable-example" style="font-size: 11px; color: #9d9d9d; margin-top: 5px; display: none;"></div>
             </div>
             <div class="property-item">
@@ -5549,7 +5560,11 @@ function showAddVariableModal() {
 
     // Adicionar listener para o tipo de variável
     const varTypeSelect = document.getElementById('modal-var-type');
+    const valueContainer = document.getElementById('value-input-container');
+    const textValueInput = document.getElementById('modal-var-value');
+    const booleanValueInput = document.getElementById('modal-var-value-boolean');
     const exampleDiv = document.getElementById('variable-example');
+
     if (varTypeSelect && exampleDiv) {
         const examples = {
             string: 'Exemplo: "Olá, mundo"',
@@ -5559,8 +5574,16 @@ function showAddVariableModal() {
             array: 'Exemplo: ["item1", "item2", 2, 4]'
         };
 
-        const updateExample = () => {
+        const updateInputType = () => {
             const selectedType = varTypeSelect.value;
+            if (selectedType === 'boolean') {
+                textValueInput.style.display = 'none';
+                booleanValueInput.style.display = 'block';
+            } else {
+                textValueInput.style.display = 'block';
+                booleanValueInput.style.display = 'none';
+            }
+
             if (examples[selectedType]) {
                 exampleDiv.textContent = examples[selectedType];
                 exampleDiv.style.display = 'block';
@@ -5569,9 +5592,9 @@ function showAddVariableModal() {
             }
         };
 
-        varTypeSelect.addEventListener('change', updateExample);
+        varTypeSelect.addEventListener('change', updateInputType);
         // Show example for the default selected type
-        updateExample();
+        updateInputType();
     }
 }
 
@@ -5751,9 +5774,13 @@ function editVariable(name) {
                 <label class="property-label">Nome da Variável</label>
                 <input type="text" id="modal-edit-var-name" class="property-input" value="${name}" readonly>
             </div>
-            <div class="property-item">
+            <div class="property-item" id="edit-value-input-container">
                 <label class="property-label">Valor</label>
                 <input type="text" id="modal-edit-var-value" class="property-input" value="${valueForInput.replace(/"/g, '&quot;')}">
+                <select id="modal-edit-var-value-boolean" class="property-input" style="display: none;">
+                    <option value="true" ${variable.value === true ? 'selected' : ''}>true</option>
+                    <option value="false" ${variable.value === false ? 'selected' : ''}>false</option>
+                </select>
             </div>
             <div class="property-item">
                 <label class="property-label">Tipo</label>
@@ -5779,11 +5806,34 @@ function editVariable(name) {
         closeEditSingleVariableModal();
     };
 
+    const typeSelect = document.getElementById('modal-edit-var-type');
+    const textValueInput = document.getElementById('modal-edit-var-value');
+    const booleanValueInput = document.getElementById('modal-edit-var-value-boolean');
+
+    const updateEditInputType = () => {
+        if (typeSelect.value === 'boolean') {
+            textValueInput.style.display = 'none';
+            booleanValueInput.style.display = 'block';
+        } else {
+            textValueInput.style.display = 'block';
+            booleanValueInput.style.display = 'none';
+        }
+    };
+
+    typeSelect.addEventListener('change', updateEditInputType);
+    updateEditInputType(); // Initial call
+
     modal.querySelector(".close-btn").addEventListener("click", closeModalHandler);
     modal.querySelector(".btn-cancel").addEventListener("click", closeModalHandler);
     modal.querySelector("#btn-confirm-edit-var").addEventListener("click", () => {
-        const newValue = document.getElementById('modal-edit-var-value').value;
         const newType = document.getElementById('modal-edit-var-type').value;
+        let newValue;
+
+        if (newType === 'boolean') {
+            newValue = document.getElementById('modal-edit-var-value-boolean').value;
+        } else {
+            newValue = document.getElementById('modal-edit-var-value').value;
+        }
         
         let parsedValue;
         try {
