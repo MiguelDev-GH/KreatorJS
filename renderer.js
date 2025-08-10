@@ -435,7 +435,7 @@ function handleDrop(e) {
 }
 
 // Criar componente no designer
-function createComponent(type, x, y) {
+function createComponent(type, x, y, initialProps = null) {
     const componentDef = componentLibrary.find(c => c.type === type);
     if (!componentDef) return;
     
@@ -450,8 +450,8 @@ function createComponent(type, x, y) {
     wrapper.style.left = x + 'px';
     wrapper.style.top = y + 'px';
     
-    // Aplicar propriedades padrão
-    const props = { ...componentDef.defaultProps };
+    // Aplicar propriedades iniciais ou padrão
+    const props = initialProps ? { ...initialProps } : { ...componentDef.defaultProps };
     const html = generateComponentHTML(componentDef, props);
     wrapper.innerHTML = html + '<div class="resize-handle"></div><div class="move-handle">✢</div>';
     
@@ -478,6 +478,25 @@ function createComponent(type, x, y) {
     renderComponentTree();
     
     logToConsole(`Componente ${componentDef.name} adicionado (ID: ${componentId})`, 'success');
+}
+
+// Duplicar um componente existente
+function duplicateComponent(sourceComponent) {
+    if (!sourceComponent) return;
+
+    const type = sourceComponent.dataset.componentType;
+    const currentX = parseInt(sourceComponent.style.left) || 0;
+    const currentY = parseInt(sourceComponent.style.top) || 0;
+    const offsetX = 20;
+    const offsetY = 20;
+
+    // Extrai as propriedades atuais (incluindo as não padrão) do componente de origem
+    const properties = extractComponentProperties(sourceComponent);
+
+    // Cria o novo componente com as propriedades extraídas e uma posição deslocada
+    createComponent(type, currentX + offsetX, currentY + offsetY, properties);
+
+    logToConsole(`Componente ${sourceComponent.dataset.componentId} duplicado.`, 'success');
 }
 
 // Gerar HTML do componente
@@ -583,6 +602,44 @@ function setupComponentEvents(wrapper) {
     
     // Prevenir interação com elementos durante o modo design
     preventDesignModeInteraction(wrapper);
+
+    // Menu de contexto
+    wrapper.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectComponent(wrapper); // Selecionar o componente ao clicar com o botão direito
+
+        const menuItems = [
+            {
+                label: 'Duplicar',
+                shortcut: 'Ctrl+D',
+                action: () => duplicateComponent(wrapper)
+            },
+            {
+                label: 'Excluir',
+                shortcut: 'Del',
+                action: () => {
+                    wrapper.remove();
+                    selectComponent(null);
+                    saveState();
+                    logToConsole('Componente removido', 'info');
+                }
+            },
+            { separator: true },
+            {
+                label: 'Trazer para Frente',
+                shortcut: 'Ctrl+Up',
+                action: () => console.log('Trazer para Frente') // Ação a ser implementada
+            },
+            {
+                label: 'Enviar para Trás',
+                shortcut: 'Ctrl+Down',
+                action: () => console.log('Enviar para Trás') // Ação a ser implementada
+            }
+        ];
+
+        showContextMenu(e, menuItems);
+    });
 }
 
 // Prevenir interação com elementos durante o modo design
@@ -3340,6 +3397,12 @@ function handleKeyboard(e) {
                 e.preventDefault();
                 newProject();
                 break;
+            case 'd':
+                e.preventDefault();
+                if (selectedComponent) {
+                    duplicateComponent(selectedComponent);
+                }
+                break;
         }
     }
     
@@ -3444,6 +3507,54 @@ function stopResize() {
         
         document.removeEventListener('mousemove', resize);
         document.removeEventListener('mouseup', stopResize);
+    }
+}
+
+// Funções do Menu de Contexto
+function showContextMenu(e, items) {
+    const menu = document.getElementById('context-menu');
+    menu.innerHTML = ''; // Limpar itens anteriores
+
+    items.forEach(item => {
+        if (item.separator) {
+            const separator = document.createElement('div');
+            separator.className = 'context-menu-separator';
+            menu.appendChild(separator);
+        } else {
+            const button = document.createElement('button');
+            button.className = 'context-menu-item';
+
+            const label = document.createElement('span');
+            label.textContent = item.label;
+            button.appendChild(label);
+
+            if (item.shortcut) {
+                const shortcut = document.createElement('span');
+                shortcut.className = 'context-menu-shortcut';
+                shortcut.textContent = item.shortcut;
+                button.appendChild(shortcut);
+            }
+
+            button.onclick = () => {
+                item.action();
+                hideContextMenu();
+            };
+            menu.appendChild(button);
+        }
+    });
+
+    menu.style.display = 'flex';
+    menu.style.left = `${e.clientX}px`;
+    menu.style.top = `${e.clientY}px`;
+
+    // Fechar o menu ao clicar fora
+    document.addEventListener('click', hideContextMenu, { once: true });
+}
+
+function hideContextMenu() {
+    const menu = document.getElementById('context-menu');
+    if (menu) {
+        menu.style.display = 'none';
     }
 }
 

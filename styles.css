@@ -1457,3 +1457,54 @@ button[style*="font-size: 12px"]:hover {
 .btn-danger {
     background-color: #dc3545;
 }
+
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    z-index: 10000;
+    background-color: #2d2d30;
+    border: 1px solid #3e3e42;
+    border-radius: 4px;
+    padding: 4px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 180px;
+}
+
+.context-menu-item {
+    background-color: transparent;
+    border: none;
+    color: #d4d4d4;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    font-weight: 300;
+    transition: background-color 0.2s;
+}
+
+.context-menu-shortcut {
+    color: #8a8a8a;
+    font-size: 11px;
+}
+
+.context-menu-item:hover {
+    background-color: #0e639c;
+    color: #ffffff;
+}
+
+.context-menu-item:hover .context-menu-shortcut {
+    color: #ffffff;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background-color: #3e3e42;
+    margin: 4px 0;
+}
