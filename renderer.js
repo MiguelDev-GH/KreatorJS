@@ -1639,7 +1639,7 @@ const eventSystem = {
         ],
         global: [
             { name: 'load', label: 'Ao Carregar a Página', description: 'Quando a página termina de carregar' },
-            { name: 'unload', label: 'Ao Fechar a Página', description: 'Quando o usuário fecha a página' },
+            { name: 'beforeunload', label: 'Ao Tentar Fechar a Página', description: 'Quando o usuário tenta fechar a página (mais confiável)' },
             { name: 'loop', label: 'Loop (Temporizador)', description: 'Executa ações repetidamente em um intervalo de tempo' }
         ]
     },
@@ -1709,12 +1709,6 @@ let eventsBackup = null;
 
 // Mostrar modal do editor de eventos
 function showEventEditorModal(component, componentId, componentType) {
-    // Fazer backup do estado atual dos eventos
-    eventsBackup = {
-        componentEvents: JSON.parse(JSON.stringify(componentEvents)),
-        globalEvents: JSON.parse(JSON.stringify(globalEvents))
-    };
-
     const isGlobal = componentType === 'global';
     // Criar modal
     const modal = document.createElement('div');
@@ -1817,8 +1811,7 @@ function showEventEditorModal(component, componentId, componentType) {
         </div>
         
         <div style="padding: 20px; border-top: 1px solid #3e3e42; background: #333333; text-align: right;">
-            <button id="cancel-events" class="btn">Cancelar</button>
-            <button id="save-events" class="btn primary">Salvar Eventos</button>
+            <button id="close-events" class="btn primary">Fechar</button>
         </div>
     `;
     
@@ -1828,19 +1821,11 @@ function showEventEditorModal(component, componentId, componentType) {
     // Event listeners
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
-            closeEventEditorModal(false); // Cancelar
+            closeEventEditorModal();
         }
     });
     
-    document.getElementById('cancel-events').addEventListener('click', () => closeEventEditorModal(false));
-    document.getElementById('save-events').addEventListener('click', () => {
-        if (isGlobal) {
-            saveGlobalEvents();
-        } else {
-            saveComponentEvents(componentId);
-        }
-        closeEventEditorModal(true); // Salvar
-    });
+    document.getElementById('close-events').addEventListener('click', () => closeEventEditorModal());
     
     // Event listeners para eventos
     document.querySelectorAll('.event-item').forEach(item => {
@@ -1857,16 +1842,10 @@ function showEventEditorModal(component, componentId, componentType) {
 }
 
 // Fechar modal do editor de eventos
-function closeEventEditorModal(isSaving = false) {
+function closeEventEditorModal() {
     const modal = document.getElementById('event-editor-modal');
     if (modal) {
         modal.remove();
-    }
-
-    if (!isSaving && eventsBackup) {
-        // Se não estiver salvando (ou seja, cancelou), restaura o backup
-        componentEvents = eventsBackup.componentEvents;
-        globalEvents = eventsBackup.globalEvents;
     }
     eventsBackup = null; // Limpa o backup
 }
@@ -2074,130 +2053,9 @@ function showManipulateVariableModal(callback) {
     }
 }
 
-function showConditionEditorModal(existingCondition, callback) {
-    const modalId = 'condition-editor-modal';
-    if (document.getElementById(modalId)) return;
-
-    const modal = document.createElement('div');
-    modal.id = modalId;
-    modal.className = 'modal';
-    modal.style.display = 'flex';
-    modal.style.zIndex = '10002'; // On top of event editor
-
-    const modalContent = document.createElement('div');
-    modalContent.className = 'modal-content';
-    modalContent.style.maxWidth = '600px';
-    modalContent.style.height = 'auto';
-
-    // Populate targets for the dropdown
-    let targetsHTML = '<option value="">Selecione um alvo...</option>';
-    // Add variables
-    Object.keys(projectVariables).forEach(name => {
-        targetsHTML += `<option value="var:${name}">${name} (Variável)</option>`;
-    });
-    // Add component properties
-    const allComponents = document.querySelectorAll('.designer-component');
-    allComponents.forEach(component => {
-        const componentId = component.dataset.componentId;
-        const componentType = component.dataset.componentType;
-        const componentDef = componentLibrary.find(c => c.type === componentType);
-        if (componentDef) {
-            const props = Object.keys(componentDef.defaultProps);
-            if (['input', 'textarea', 'select'].includes(componentType)) props.push('value');
-            if (componentType === 'checkbox') props.push('checked');
-
-            props.forEach(prop => {
-                targetsHTML += `<option value="prop:${componentId}.${prop}">${componentId}.${prop} (Propriedade)</option>`;
-            });
-        }
-    });
-
-
-    modalContent.innerHTML = `
-        <div class="modal-header">
-            <h3>Editor de Condição</h3>
-            <button class="close-btn">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="property-item">
-                <label class="property-label">Alvo da Condição</label>
-                <select id="modal-cond-target" class="property-input">
-                    ${targetsHTML}
-                </select>
-            </div>
-            <div class="property-item">
-                <label class="property-label">Operador</label>
-                <select id="modal-cond-operator" class="property-input">
-                    <option value="==">Igual (==)</option>
-                    <option value="!=">Diferente (!=)</option>
-                    <option value=">">Maior que (>)</option>
-                    <option value="<">Menor que (<)</option>
-                    <option value=">=">Maior ou igual que (>=)</option>
-                    <option value="<=">Menor ou igual que (<=)</option>
-                    <option value="contains">Contém</option>
-                    <option value="not_contains">Não contém</option>
-                </select>
-            </div>
-            <div class="property-item">
-                <label class="property-label">Valor a Comparar</label>
-                <input type="text" id="modal-cond-value" class="property-input">
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn btn-cancel">Cancelar</button>
-            <button id="btn-confirm-condition" class="btn primary">Confirmar</button>
-        </div>
-    `;
-
-    modal.appendChild(modalContent);
-    document.body.appendChild(modal);
-
-    // Pre-fill if editing
-    if (existingCondition) {
-        document.getElementById('modal-cond-target').value = existingCondition.target || '';
-        document.getElementById('modal-cond-operator').value = existingCondition.operator || '==';
-        document.getElementById('modal-cond-value').value = existingCondition.value || '';
-    }
-
-    const valueInput = document.getElementById('modal-cond-value');
-    attachSuggestionListener(valueInput);
-
-    const closeModal = () => {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.remove();
-        }
-    };
-
-    modal.querySelector('.close-btn').addEventListener('click', closeModal);
-    modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
-
-    document.getElementById('btn-confirm-condition').addEventListener('click', () => {
-        const target = document.getElementById('modal-cond-target').value;
-        const operator = document.getElementById('modal-cond-operator').value;
-        const value = document.getElementById('modal-cond-value').value;
-
-        if (target && operator) {
-            if (callback) {
-                callback({ target, operator, value });
-            }
-        }
-        closeModal();
-    });
-}
 
 // Selecionar evento para edição
 function selectEventForEditing(eventName, componentType, componentId) {
-    const isGlobal = componentType === 'global';
-    // Salvar evento anterior se existir
-    if (currentEditingEvent && currentEditingEvent !== eventName) {
-        if (isGlobal) {
-            saveCurrentGlobalEventActions(currentEditingEvent);
-        } else {
-            saveCurrentEventActions(componentId, currentEditingEvent);
-        }
-    }
-    
     // Definir evento atual
     currentEditingEvent = eventName;
     
@@ -2480,7 +2338,6 @@ function renderActionItem(action, index) {
                 ${conditionDetails}
             </div>
             <div style="display: flex; gap: 5px;">
-                <button class="condition-action btn ${conditionButtonClass}" data-index="${index}">Condição</button>
                 <button class="edit-action btn" data-index="${index}">Editar</button>
                 <button class="remove-action btn" data-index="${index}" style="background-color: #dc3545;">Remover</button>
             </div>
@@ -4143,31 +4000,6 @@ function setupActionListeners(eventName, componentType, componentId, currentActi
         });
     });
 
-    // Listener para o botão de condição
-    document.querySelectorAll('.condition-action').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const index = parseInt(e.target.dataset.index, 10);
-            const action = currentActions[index];
-
-            if (!action) {
-                console.error("Ação não encontrada para o índice:", index);
-                return;
-            }
-
-            showConditionEditorModal(action.condition, (newCondition) => {
-                // Se o usuário limpou a condição, o objeto pode estar vazio.
-                if (newCondition && newCondition.target) {
-                    action.condition = newCondition;
-                } else {
-                    delete action.condition; // Remove a propriedade de condição
-                }
-                
-                // Re-render the list to show the changes
-                loadActionsEditor(eventName, componentType, componentId);
-                saveState(); // Salva o estado para undo/redo
-            });
-        });
-    });
 }
 
 // Editar uma ação existente
@@ -4186,22 +4018,46 @@ function editAction(index, currentActions) {
 
 // Remover ação
 function removeAction(index) {
-    const actionsList = document.getElementById('actions-list');
-    const actionItems = actionsList.querySelectorAll('.action-item');
-    
-    if (actionItems[index]) {
-        actionItems[index].remove();
+    const isGlobal = !selectedComponent;
+    const componentId = isGlobal ? 'global' : selectedComponent.dataset.componentId;
+    const componentType = isGlobal ? 'global' : selectedComponent.dataset.componentType;
+    const eventName = currentEditingEvent;
+
+    if (!eventName) return;
+
+    let actions;
+    if (isGlobal) {
+        if (eventName === 'loop' && globalEvents.loop) {
+            actions = globalEvents.loop.actions;
+        } else {
+            actions = globalEvents[eventName];
+        }
+    } else {
+        if (componentEvents[componentId]) {
+            actions = componentEvents[componentId][eventName];
+        }
+    }
+
+    if (actions && actions[index]) {
+        actions.splice(index, 1); // Remove a ação do modelo de dados
         
-        // Reindexar os itens restantes
-        const remainingItems = actionsList.querySelectorAll('.action-item');
-        remainingItems.forEach((item, newIndex) => {
-            item.dataset.index = newIndex;
-            const removeButton = item.querySelector('.remove-action');
-            if (removeButton) {
-                removeButton.dataset.index = newIndex;
+        // Se for a última ação de um evento, remove o próprio evento
+        if (actions.length === 0) {
+            if (isGlobal) {
+                delete globalEvents[eventName];
+            } else {
+                delete componentEvents[componentId][eventName];
             }
-        });
-        saveState();
+        }
+
+        saveState(); // Salva o estado para undo/redo
+        loadActionsEditor(eventName, componentType, componentId); // Re-renderiza a lista de ações
+        
+        // Atualiza a contagem de eventos no inspetor de objetos
+        if (!isGlobal && selectedComponent) {
+            populateObjectInspector(selectedComponent);
+        }
+        logToConsole('Ação removida com sucesso.', 'success');
     }
 }
 
@@ -4227,8 +4083,7 @@ function saveAction(originalAction = null) {
     const newAction = {
         targetId: targetElement === 'global' ? null : targetElement,
         actionType: actionType,
-        value: actionValue,
-        condition: originalAction ? originalAction.condition : undefined
+        value: actionValue
     };
     
     const isGlobal = !selectedComponent;
@@ -4238,7 +4093,17 @@ function saveAction(originalAction = null) {
 
     let actions;
     if (isGlobal) {
-        actions = (eventName === 'loop') ? globalEvents[eventName].actions : globalEvents[eventName];
+        if (eventName === 'loop') {
+            if (!globalEvents.loop) {
+                globalEvents.loop = { interval: 1000, actions: [] };
+            }
+            actions = globalEvents.loop.actions;
+        } else {
+            if (!globalEvents[eventName]) {
+                globalEvents[eventName] = [];
+            }
+            actions = globalEvents[eventName];
+        }
     } else {
         if (!componentEvents[componentId]) componentEvents[componentId] = {};
         if (!componentEvents[componentId][eventName]) componentEvents[componentId][eventName] = [];
@@ -4260,164 +4125,6 @@ function saveAction(originalAction = null) {
 let currentEditingEvent = null;
 let editingActionIndex = null; // <<< Nova variável
 
-// Salvar eventos do componente
-async function saveComponentEvents(componentId) {
-    if (currentEditingEvent) {
-        saveCurrentEventActions(componentId, currentEditingEvent);
-    }
-
-    const allErrors = [];
-    const events = componentEvents[componentId] || {};
-    for (const eventName in events) {
-        for (const action of events[eventName]) {
-            const result = validateActionReferences(action.value);
-            if (!result.isValid) {
-                allErrors.push(...result.errors.map(e => `No evento "${eventName}": ${e}`));
-            }
-        }
-    }
-
-    if (allErrors.length > 0) {
-        const errorList = allErrors.join('\n - ');
-        const confirmed = await showCustomConfirm(
-            'Aviso de Referência Inválida',
-            `Foram encontradas referências inválidas nas ações configuradas:\n - ${errorList}\n\nIsso pode causar erros na execução do projeto. Deseja salvar mesmo assim?`
-        );
-        if (!confirmed) {
-            // Restaura o estado para antes de abrir o modal
-            if(eventsBackup) closeEventEditorModal(false); 
-            return;
-        }
-    }
-    
-    const eventCount = Object.keys(events).length;
-    logToConsole(`Eventos salvos para ${componentId}: ${eventCount} evento(s) configurado(s)`, 'success');
-    
-    if (selectedComponent && selectedComponent.dataset.componentId === componentId) {
-        populateObjectInspector(selectedComponent);
-    }
-}
-
-// Salvar eventos globais
-async function saveGlobalEvents() {
-    if (currentEditingEvent) {
-        saveCurrentGlobalEventActions(currentEditingEvent);
-    }
-
-    const allErrors = [];
-    for (const eventName in globalEvents) {
-        for (const action of globalEvents[eventName]) {
-            const result = validateActionReferences(action.value);
-            if (!result.isValid) {
-                allErrors.push(...result.errors.map(e => `No evento "${eventName}": ${e}`));
-            }
-        }
-    }
-
-    if (allErrors.length > 0) {
-        const errorList = allErrors.join('\n - ');
-        const confirmed = await showCustomConfirm(
-            'Aviso de Referência Inválida',
-            `Foram encontradas referências inválidas nas ações configuradas:\n - ${errorList}\n\nIsso pode causar erros na execução do projeto. Deseja salvar mesmo assim?`
-        );
-        if (!confirmed) {
-            if(eventsBackup) closeEventEditorModal(false);
-            return;
-        }
-    }
-
-    const eventCount = Object.keys(globalEvents).length;
-    logToConsole(`Eventos globais salvos: ${eventCount} evento(s) configurado(s)`, 'success');
-}
-
-// Salvar ações do evento atual
-function saveCurrentEventActions(componentId, eventName) {
-    const actionsEditor = document.getElementById('actions-editor');
-    const actionItems = actionsEditor.querySelectorAll('.action-item');
-    const actions = [];
-    
-    actionItems.forEach(actionItem => {
-        const conditionStr = actionItem.dataset.actionCondition;
-        let condition = null;
-        // O valor pode ser 'undefined' se o atributo não existir.
-        if (conditionStr && conditionStr !== 'undefined') {
-            try {
-                condition = JSON.parse(conditionStr);
-            } catch (e) {
-                console.error('Falha ao analisar a condição da ação:', e);
-            }
-        }
-
-        const actionData = {
-            targetId: actionItem.dataset.targetId === 'global' ? null : actionItem.dataset.targetId,
-            actionType: actionItem.dataset.actionType,
-            actionName: actionItem.querySelector('div:first-child').textContent,
-            value: actionItem.dataset.actionValue,
-            condition: condition // Adicionar a condição ao objeto da ação
-        };
-        actions.push(actionData);
-    });
-    
-    // Inicializar objeto de eventos se não existir
-    if (!componentEvents[componentId]) {
-        componentEvents[componentId] = {};
-    }
-    
-    // Salvar ou remover evento baseado nas ações
-    if (actions.length > 0) {
-        componentEvents[componentId][eventName] = actions;
-    } else {
-        delete componentEvents[componentId][eventName];
-    }
-}
-
-// Salvar ações do evento global atual
-function saveCurrentGlobalEventActions(eventName) {
-    const actionsEditor = document.getElementById('actions-editor');
-    const actionItems = actionsEditor.querySelectorAll('.action-item');
-    const actions = [];
-
-    actionItems.forEach(actionItem => {
-        const conditionStr = actionItem.dataset.actionCondition;
-        let condition = null;
-        if (conditionStr && conditionStr !== 'undefined') {
-            try {
-                condition = JSON.parse(conditionStr);
-            } catch (e) {
-                console.error('Falha ao analisar a condição da ação:', e);
-            }
-        }
-
-        const actionData = {
-            targetId: actionItem.dataset.targetId === 'global' ? null : actionItem.dataset.targetId,
-            actionType: actionItem.dataset.actionType,
-            actionName: actionItem.querySelector('div:first-child').textContent,
-            value: actionItem.dataset.actionValue,
-            condition: condition // Adicionar a condição ao objeto da ação
-        };
-        actions.push(actionData);
-    });
-
-    if (eventName === 'loop') {
-        if (actions.length > 0) {
-            const intervalInput = document.getElementById('loop-interval');
-            const interval = intervalInput ? parseInt(intervalInput.value, 10) : 1000;
-            globalEvents.loop = {
-                interval: isNaN(interval) ? 1000 : interval,
-                actions: actions
-            };
-        } else {
-            delete globalEvents.loop;
-        }
-    } else {
-        // Salvar ou remover evento global baseado nas ações
-        if (actions.length > 0) {
-            globalEvents[eventName] = actions;
-        } else {
-            delete globalEvents[eventName];
-        }
-    }
-}
 
 // Extrair dados da ação de um elemento DOM (removido, agora os dados são lidos diretamente do dataset)
 
@@ -4725,7 +4432,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (globalEvents.loop && globalEvents.loop.actions && globalEvents.loop.actions.length > 0) {
         js += `
     const loopActions = () => {
+        try {
 ${globalEvents.loop.actions.map(action => generateActionCode(action)).join('')}
+        } catch (e) {
+            console.error("Erro dentro do loop de eventos:", e);
+        }
     };
     setInterval(loopActions, ${globalEvents.loop.interval || 1000});
 `;
@@ -4912,42 +4623,6 @@ function generateActionCode(action) {
     // Se não houver lógica de ação, não retorne nada.
     if (!actionLogic) {
         return '';
-    }
-
-    // Envolver a lógica da ação em uma verificação de condição, se houver uma.
-    if (action.condition && action.condition.target) {
-        const { target, operator, value } = action.condition;
-        let targetValueCode = '';
-
-        if (target.startsWith('var:')) {
-            const varName = target.substring(4);
-            targetValueCode = `projectVariables['${varName}'].value`;
-        } else if (target.startsWith('prop:')) {
-            const [componentId, propName] = target.substring(5).split('.');
-            targetValueCode = `getPropertyValue(getElementById('${componentId}'), '${propName}')`;
-        }
-
-        if (targetValueCode) {
-            const comparisonValueCode = resolveValue(value || '');
-            
-            const numericOperators = ['>', '<', '>=', '<='];
-            const isNumericComparison = numericOperators.includes(operator);
-
-            const leftOperand = isNumericComparison ? `parseFloat(${targetValueCode})` : `String(${targetValueCode})`;
-            const rightOperand = isNumericComparison ? `parseFloat(${comparisonValueCode})` : `String(${comparisonValueCode})`;
-            
-            let conditionExpression;
-            if (operator === 'contains') {
-                conditionExpression = `${leftOperand}.includes(${rightOperand})`;
-            } else if (operator === 'not_contains') {
-                conditionExpression = `!${leftOperand}.includes(${rightOperand})`;
-            } else {
-                conditionExpression = `${leftOperand} ${operator} ${rightOperand}`;
-            }
-            
-            const indentedActionLogic = actionLogic.trim().split('\n').map(line => `        ${line}`).join('\n');
-            return `    if (${conditionExpression}) {\n${indentedActionLogic}\n    }\n`;
-        }
     }
 
     return actionLogic;
