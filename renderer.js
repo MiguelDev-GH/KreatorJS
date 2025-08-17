@@ -37,6 +37,44 @@ function updateCanvasTransform() {
     }
 }
 
+// Dicas para as propriedades do inspetor de objetos
+const propertyTooltips = {
+    // Geral
+    id: "O identificador único do componente. Usado para referenciar este componente em eventos e scripts.",
+    type: "O tipo do componente (não pode ser alterado).",
+    x: "A posição horizontal do componente no canvas, em pixels (px).",
+    y: "A posição vertical do componente no canvas, em pixels (px).",
+
+    // Propriedades Básicas
+    text: "O texto exibido pelo componente. Para botões, é o texto interno; para rótulos, é o conteúdo; para caixas de seleção, é o rótulo.",
+    placeholder: "O texto de exemplo exibido em um campo de entrada antes do usuário digitar algo.",
+    src: "O caminho ou URL para a fonte da imagem. Pode ser um arquivo local ou um link da web.",
+    alt: "O texto alternativo para uma imagem, exibido se a imagem não puder ser carregada. Importante para acessibilidade.",
+    width: "A largura do componente. Pode ser em pixels (ex: '150px'), porcentagem (ex: '50%') ou 'auto'.",
+    height: "A altura do componente. Pode ser em pixels (ex: '40px'), porcentagem (ex: '10%') ou 'auto'.",
+    options: "Define as opções para um componente de lista suspensa (select).",
+
+    // Estilo
+    backgroundColor: "A cor de fundo do componente. Use nomes de cores (ex: 'red'), códigos hexadecimais (ex: '#FF0000') ou RGB (ex: 'rgb(255,0,0)').",
+    color: "A cor do texto do componente.",
+    fontSize: "O tamanho da fonte do texto (ex: '16px', '1.2em').",
+    fontWeight: "A espessura da fonte (ex: 'normal', 'bold', 'lighter').",
+    padding: "O espaçamento interno do componente (ex: '10px', '5px 10px').",
+    margin: "O espaçamento externo do componente, criando espaço ao redor dele.",
+    border: "Uma forma abreviada para definir a largura, estilo e cor da borda (ex: '1px solid black').",
+    borderStyle: "O estilo da borda (ex: 'solid', 'dashed', 'dotted', 'none').",
+    borderWidth: "A largura da borda (ex: '1px', '2px').",
+    borderColor: "A cor da borda.",
+    borderRadius: "O raio da borda, usado para criar cantos arredondados (ex: '5px', '50%').",
+    zIndex: "A ordem de empilhamento do componente. Um valor maior o coloca na frente de outros com valores menores.",
+    boxShadow: "Adiciona uma sombra ao componente (ex: '2px 2px 5px rgba(0,0,0,0.3)').",
+    opacity: "A transparência do componente, de 0 (totalmente transparente) a 1 (totalmente opaco).",
+    transform: "Aplica transformações 2D ou 3D ao componente (ex: 'rotate(45deg)', 'scale(1.2)').",
+    cursor: "O tipo de cursor do mouse exibido ao passar sobre o componente (ex: 'pointer', 'text', 'move').",
+    textAlign: "O alinhamento horizontal do texto dentro do componente (ex: 'left', 'center', 'right').",
+    resize: "Define se a área de texto pode ser redimensionada pelo usuário ('both', 'horizontal', 'vertical', 'none')."
+};
+
 // Componentes disponíveis na paleta
 const componentLibrary = [
     {
@@ -884,28 +922,28 @@ function populateObjectInspector(component) {
         <div class="property-group">
             <div class="property-group-title">Geral</div>
             <div class="property-item">
-                <label class="property-label">ID</label>
+                <label class="property-label" title="${propertyTooltips.id}">ID</label>
                 <div class="id-input-wrapper" style="display: flex; align-items: center; gap: 5px;">
-                    <input type="text" class="property-input" id="prop-id" value="${component.dataset.componentId}" readonly style="flex: 1;">
+                    <input type="text" class="property-input" id="prop-id" value="${component.dataset.componentId}" readonly style="flex: 1;" title="${propertyTooltips.id}">
                     <button id="btn-save-id" class="btn" style="display: none;">Salvar</button>
                     <button id="btn-cancel-id" class="btn" style="display: none;">Cancelar</button>
                 </div>
             </div>
             <div class="property-item">
-                <label class="property-label">Tipo</label>
-                <input type="text" class="property-input" value="${componentDef.name}" readonly>
+                <label class="property-label" title="${propertyTooltips.type}">Tipo</label>
+                <input type="text" class="property-input" value="${componentDef.name}" readonly title="${propertyTooltips.type}">
             </div>
         </div>
         
         <div class="property-group">
             <div class="property-group-title">Posição</div>
             <div class="property-item">
-                <label class="property-label">X</label>
-                <input type="number" class="property-input" id="prop-x" value="${parseInt(component.style.left)}">
+                <label class="property-label" title="${propertyTooltips.x}">X</label>
+                <input type="number" class="property-input" id="prop-x" value="${parseInt(component.style.left)}" title="${propertyTooltips.x}">
             </div>
             <div class="property-item">
-                <label class="property-label">Y</label>
-                <input type="number" class="property-input" id="prop-y" value="${parseInt(component.style.top)}">
+                <label class="property-label" title="${propertyTooltips.y}">Y</label>
+                <input type="number" class="property-input" id="prop-y" value="${parseInt(component.style.top)}" title="${propertyTooltips.y}">
             </div>
         </div>
         
@@ -948,17 +986,237 @@ function populateObjectInspector(component) {
 
 // Helper function to generate a composite color input (text + color picker)
 function generateColorInputHTML(property, value, id = '') {
-    // If the value is a variable reference (e.g., "<my_var>"), use a default for the color picker
+    const isGradient = typeof value === 'string' && value.includes('gradient');
     const isVar = typeof value === 'string' && value.trim().startsWith('<');
-    const colorValue = isVar ? '#ffffff' : value; // Default to white if it's a variable
-    const textValue = value; // The text input should show the raw value (including variables)
+    const tooltip = propertyTooltips[property] || `Define o valor para ${property}`;
+    const textValue = value;
+
+    // Determina o que mostrar na área de amostra de cor
+    let swatchHTML;
+    if (isGradient) {
+        // Quando for um gradiente, mostra uma pré-visualização que abre o editor ao clicar
+        swatchHTML = `<div class="gradient-preview" style="background: ${value};" data-action="open-gradient-editor" data-property="${property}" data-id="${id || ''}" title="Editar gradiente"></div>`;
+    } else {
+        // Quando for uma cor sólida, mostra o seletor de cores
+        const colorValue = isVar ? '#ffffff' : value;
+        swatchHTML = `<input type="color" class="color-picker-input" value="${colorValue}">`;
+    }
 
     return `
         <div class="color-input-wrapper">
-            <input type="text" class="property-input" data-property="${property}" value="${textValue}" ${id ? `id="${id}"` : ''}>
-            <input type="color" class="color-picker-input" value="${colorValue}">
+            <input type="text" class="property-input" data-property="${property}" value="${textValue}" ${id ? `id="${id}"` : ''} title="${tooltip}">
+            ${swatchHTML}
+            <button type="button" class="btn-gradient" data-action="open-gradient-editor" data-property="${property}" data-id="${id || ''}" title="Criar ou editar gradiente">🎨</button>
         </div>
     `;
+}
+
+// Abre o editor de gradiente
+function openGradientEditor(property, id) {
+    const targetInput = document.getElementById(id) || document.querySelector(`#object-inspector [data-property="${property}"]`);
+    if (!targetInput) {
+        console.error("Input alvo não encontrado para o editor de gradiente");
+        return;
+    }
+    const currentValue = targetInput.value;
+
+    // Lógica para construir e mostrar o modal
+    showGradientEditorModal(currentValue, (newValue) => {
+        targetInput.value = newValue;
+        // Dispara um evento de input para que a propriedade do componente seja atualizada
+        targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+}
+
+// Constrói e exibe o modal do editor de gradiente
+function showGradientEditorModal(initialValue, onSave) {
+    // Fecha qualquer modal de gradiente existente
+    const existingModal = document.getElementById('gradient-editor-modal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'gradient-editor-modal';
+    modal.className = 'modal';
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content gradient-editor';
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Editor de Gradiente</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="gradient-editor-main">
+                <div class="gradient-preview-area">
+                    <div id="gradient-preview-box"></div>
+                </div>
+                <div class="gradient-controls">
+                    <div class="property-item">
+                        <label>Tipo</label>
+                        <select id="gradient-type-select">
+                            <option value="linear">Linear</option>
+                            <option value="radial">Radial</option>
+                        </select>
+                    </div>
+                    <div class="property-item" id="gradient-angle-control">
+                        <label>Ângulo</label>
+                        <div class="range-input-wrapper">
+                            <input type="range" id="gradient-angle-slider" min="0" max="360" value="90">
+                            <span id="gradient-angle-value">90°</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="gradient-stops-editor">
+                <h4>Paradas de Cor (Color Stops)</h4>
+                <div id="gradient-stops-bar-wrapper">
+                    <div id="gradient-stops-bar"></div>
+                </div>
+                <div id="gradient-stops-inputs">
+                    <!-- As entradas para as paradas de cor serão inseridas aqui -->
+                </div>
+                <button id="btn-add-stop" class="btn" style="margin-top: 10px;">+ Adicionar Parada</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Cancelar</button>
+            <button class="btn primary btn-save-gradient">Salvar</button>
+        </div>
+    `;
+
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+
+    // --- Lógica do Editor de Gradiente ---
+    let gradientState = {
+        type: 'linear',
+        angle: 90,
+        stops: [
+            { color: '#ff0000', position: 0 },
+            { color: '#0000ff', position: 100 }
+        ]
+    };
+
+    const typeSelect = modal.querySelector('#gradient-type-select');
+    const angleSlider = modal.querySelector('#gradient-angle-slider');
+    const angleValue = modal.querySelector('#gradient-angle-value');
+    const previewBox = modal.querySelector('#gradient-preview-box');
+    const stopsBar = modal.querySelector('#gradient-stops-bar');
+    const stopsInputsContainer = modal.querySelector('#gradient-stops-inputs');
+    const addStopBtn = modal.querySelector('#btn-add-stop');
+
+    function updatePreview() {
+        const gradientCss = generateGradientCss(gradientState);
+        previewBox.style.background = gradientCss;
+        renderStopsBar();
+    }
+
+    function generateGradientCss(state) {
+        const stopsCss = state.stops
+            .sort((a, b) => a.position - b.position)
+            .map(stop => `${stop.color} ${stop.position}%`)
+            .join(', ');
+
+        if (state.type === 'linear') {
+            return `linear-gradient(${state.angle}deg, ${stopsCss})`;
+        } else {
+            return `radial-gradient(circle, ${stopsCss})`;
+        }
+    }
+
+    function renderStopsBar() {
+        stopsBar.innerHTML = '';
+        gradientState.stops.forEach((stop, index) => {
+            const handle = document.createElement('div');
+            handle.className = 'stop-handle';
+            handle.style.left = `${stop.position}%`;
+            handle.style.backgroundColor = stop.color;
+            handle.dataset.index = index;
+            stopsBar.appendChild(handle);
+        });
+    }
+
+    function renderStopsInputs() {
+        stopsInputsContainer.innerHTML = '';
+        gradientState.stops.forEach((stop, index) => {
+            const item = document.createElement('div');
+            item.className = 'stop-input-item';
+            item.innerHTML = `
+                <div class="color-input-container">
+                    <input type="color" value="${stop.color}" data-index="${index}">
+                </div>
+                <input type="range" value="${stop.position}" min="0" max="100" data-index="${index}">
+                <span>${stop.position}%</span>
+                <button class="btn-remove-stop" data-index="${index}">&times;</button>
+            `;
+            stopsInputsContainer.appendChild(item);
+        });
+
+        // Adiciona listeners para os novos inputs
+        stopsInputsContainer.querySelectorAll('input[type="color"]').forEach(input => {
+            input.addEventListener('input', (e) => {
+                gradientState.stops[e.target.dataset.index].color = e.target.value;
+                updatePreview();
+            });
+        });
+        stopsInputsContainer.querySelectorAll('input[type="range"]').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const newPos = parseInt(e.target.value);
+                gradientState.stops[e.target.dataset.index].position = newPos;
+                e.target.nextElementSibling.textContent = `${newPos}%`;
+                updatePreview();
+            });
+        });
+        stopsInputsContainer.querySelectorAll('.btn-remove-stop').forEach(button => {
+            button.addEventListener('click', (e) => {
+                if (gradientState.stops.length > 2) {
+                    gradientState.stops.splice(e.target.dataset.index, 1);
+                    renderStopsInputs();
+                    updatePreview();
+                } else {
+                    showCustomAlert('Aviso', 'Um gradiente precisa de pelo menos 2 paradas de cor.');
+                }
+            });
+        });
+    }
+
+    // --- Listeners dos Controles Principais ---
+    typeSelect.addEventListener('change', () => {
+        gradientState.type = typeSelect.value;
+        modal.querySelector('#gradient-angle-control').style.display = typeSelect.value === 'linear' ? 'block' : 'none';
+        updatePreview();
+    });
+
+    angleSlider.addEventListener('input', () => {
+        gradientState.angle = angleSlider.value;
+        angleValue.textContent = `${angleSlider.value}°`;
+        updatePreview();
+    });
+
+    addStopBtn.addEventListener('click', () => {
+        if (gradientState.stops.length < 10) { // Limite de paradas
+            gradientState.stops.push({ color: '#ffffff', position: 100 });
+            renderStopsInputs();
+            updatePreview();
+        }
+    });
+
+    // --- Funções de Fechamento e Salvamento ---
+    const closeModal = () => modal.remove();
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.btn-cancel').addEventListener('click', closeModal);
+    modal.querySelector('.btn-save-gradient').addEventListener('click', () => {
+        if (onSave) {
+            onSave(generateGradientCss(gradientState));
+        }
+        closeModal();
+    });
+
+    // --- Inicialização ---
+    // Futuramente, aqui vamos fazer o parse do `initialValue`
+    renderStopsInputs();
+    updatePreview();
 }
 
 // Gerar inputs de propriedades básicas
@@ -973,14 +1231,15 @@ function generateBasicPropertyInputs(componentDef, component) {
         if (basicProps.includes(key)) {
             const value = getPropertyValue(element, key);
             const inputType = getInputType(key);
+            const tooltip = propertyTooltips[key] || `Define o valor para ${key}`;
             
             if (key === 'src') {
                 // Campo especial para imagens com gerenciador
                 html += `
                     <div class="property-item">
-                        <label class="property-label">Fonte da Imagem</label>
+                        <label class="property-label" title="${tooltip}">Fonte da Imagem</label>
                         <div style="display: flex; gap: 5px;">
-                            <input type="text" class="property-input" data-property="${key}" value="${value}" style="flex: 1;">
+                            <input type="text" class="property-input" data-property="${key}" value="${value}" style="flex: 1;" title="${tooltip}">
                             <button type="button" onclick="openImageManager('${key}')" style="padding: 4px 8px; background: #007acc; color: white; border: none; border-radius: 3px; cursor: pointer;">📁</button>
                         </div>
                     </div>
@@ -988,8 +1247,8 @@ function generateBasicPropertyInputs(componentDef, component) {
             } else {
                 html += `
                     <div class="property-item">
-                        <label class="property-label">${formatPropertyName(key)}</label>
-                        <input type="${inputType}" class="property-input" data-property="${key}" value="${value}">
+                        <label class="property-label" title="${tooltip}">${formatPropertyName(key)}</label>
+                        <input type="${inputType}" class="property-input" data-property="${key}" value="${value}" title="${tooltip}">
                     </div>
                 `;
             }
@@ -998,10 +1257,11 @@ function generateBasicPropertyInputs(componentDef, component) {
     
     // Para lista suspensa, adicionar editor de opções
     if (componentDef.type === 'select') {
+        const tooltip = propertyTooltips['options'] || 'Editar as opções da lista suspensa';
         html += `
             <div class="property-item">
-                <label class="property-label">Opções da Lista</label>
-                <button type="button" onclick="editSelectOptions(selectedComponent)" style="width: 100%; padding: 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Editar Opções</button>
+                <label class="property-label" title="${tooltip}">Opções da Lista</label>
+                <button type="button" onclick="editSelectOptions(selectedComponent)" style="width: 100%; padding: 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;" title="${tooltip}">Editar Opções</button>
             </div>
         `;
     }
@@ -1022,8 +1282,8 @@ function generateStylePropertyInputs(componentDef, component) {
         <div class="property-subsection">
             <div class="property-subsection-title">Bordas</div>
             <div class="property-item">
-                <label class="property-label">Estilo da Borda</label>
-                <select class="property-input" data-property="borderStyle">
+                <label class="property-label" title="${propertyTooltips.borderStyle}">Estilo da Borda</label>
+                <select class="property-input" data-property="borderStyle" title="${propertyTooltips.borderStyle}">
                     <option value="none" ${getPropertyValue(element, 'borderStyle') === 'none' ? 'selected' : ''}>Nenhuma</option>
                     <option value="solid" ${getPropertyValue(element, 'borderStyle') === 'solid' ? 'selected' : ''}>Sólida</option>
                     <option value="dashed" ${getPropertyValue(element, 'borderStyle') === 'dashed' ? 'selected' : ''}>Tracejada</option>
@@ -1032,16 +1292,16 @@ function generateStylePropertyInputs(componentDef, component) {
                 </select>
             </div>
             <div class="property-item">
-                <label class="property-label">Largura da Borda</label>
-                <input type="text" class="property-input" data-property="borderWidth" value="${getPropertyValue(element, 'borderWidth') || '1px'}" placeholder="1px">
+                <label class="property-label" title="${propertyTooltips.borderWidth}">Largura da Borda</label>
+                <input type="text" class="property-input" data-property="borderWidth" value="${getPropertyValue(element, 'borderWidth') || '1px'}" placeholder="1px" title="${propertyTooltips.borderWidth}">
             </div>
             <div class="property-item">
-                <label class="property-label">Cor da Borda</label>
+                <label class="property-label" title="${propertyTooltips.borderColor}">Cor da Borda</label>
                 ${generateColorInputHTML('borderColor', getPropertyValue(element, 'borderColor') || '#000000')}
             </div>
             <div class="property-item">
-                <label class="property-label">Raio da Borda</label>
-                <input type="text" class="property-input" data-property="borderRadius" value="${getPropertyValue(element, 'borderRadius') || '0px'}" placeholder="0px">
+                <label class="property-label" title="${propertyTooltips.borderRadius}">Raio da Borda</label>
+                <input type="text" class="property-input" data-property="borderRadius" value="${getPropertyValue(element, 'borderRadius') || '0px'}" placeholder="0px" title="${propertyTooltips.borderRadius}">
             </div>
         </div>
     `;
@@ -1055,16 +1315,17 @@ function generateStylePropertyInputs(componentDef, component) {
     styleProps.forEach(key => {
         const value = getPropertyValue(element, key);
         const inputType = getInputType(key);
+        const tooltip = propertyTooltips[key] || `Define o valor para ${key}`;
 
         html += `
             <div class="property-item">
-                <label class="property-label">${formatPropertyName(key)}</label>
+                <label class="property-label" title="${tooltip}">${formatPropertyName(key)}</label>
         `;
 
         if (inputType === 'color') {
             html += generateColorInputHTML(key, value);
         } else {
-            html += `<input type="${inputType}" class="property-input" data-property="${key}" value="${value}">`;
+            html += `<input type="${inputType}" class="property-input" data-property="${key}" value="${value}" title="${tooltip}">`;
         }
 
         html += `</div>`;
@@ -1077,8 +1338,8 @@ function generateStylePropertyInputs(componentDef, component) {
         <div class="property-subsection">
             <div class="property-subsection-title">Posicionamento</div>
             <div class="property-item">
-                <label class="property-label">Z-Index (Camada)</label>
-                <input type="number" class="property-input" data-property="zIndex" value="${element.style.zIndex || '1'}" min="1" max="9999">
+                <label class="property-label" title="${propertyTooltips.zIndex}">Z-Index (Camada)</label>
+                <input type="number" class="property-input" data-property="zIndex" value="${element.style.zIndex || '1'}" min="1" max="9999" title="${propertyTooltips.zIndex}">
             </div>
         </div>
     `;
@@ -1098,11 +1359,12 @@ function generateStylePropertyInputs(componentDef, component) {
     `;
 
     extraProperties.forEach(prop => {
+        const tooltip = propertyTooltips[prop.key] || `Define o valor para ${prop.key}`;
         if (prop.type === 'select') {
             html += `
                 <div class="property-item">
-                    <label class="property-label">${prop.label}</label>
-                    <select class="property-input" data-property="${prop.key}">
+                    <label class="property-label" title="${tooltip}">${prop.label}</label>
+                    <select class="property-input" data-property="${prop.key}" title="${tooltip}">
                         ${prop.options.map(option => 
                             `<option value="${option}" ${prop.value === option ? 'selected' : ''}>${option}</option>`
                         ).join('')}
@@ -1112,17 +1374,17 @@ function generateStylePropertyInputs(componentDef, component) {
         } else if (prop.type === 'range') {
             html += `
                 <div class="property-item">
-                    <label class="property-label">${prop.label}</label>
+                    <label class="property-label" title="${tooltip}">${prop.label}</label>
                     <input type="range" class="property-input" data-property="${prop.key}" 
-                           value="${prop.value}" min="${prop.min}" max="${prop.max}" step="${prop.step}">
+                           value="${prop.value}" min="${prop.min}" max="${prop.max}" step="${prop.step}" title="${tooltip}">
                     <span class="range-value">${prop.value}</span>
                 </div>
             `;
         } else {
             html += `
                 <div class="property-item">
-                    <label class="property-label">${prop.label}</label>
-                    <input type="${prop.type}" class="property-input" data-property="${prop.key}" value="${prop.value}">
+                    <label class="property-label" title="${tooltip}">${prop.label}</label>
+                    <input type="${prop.type}" class="property-input" data-property="${prop.key}" value="${prop.value}" title="${tooltip}">
                 </div>
             `;
         }
@@ -1157,6 +1419,11 @@ function getPropertyValue(element, property) {
         if (wrapper.dataset[propKey] !== undefined) {
             return wrapper.dataset[propKey];
         }
+    }
+
+    // Lida com gradientes de fundo de forma especial
+    if (property === 'backgroundColor' && element.style.background.includes('gradient')) {
+        return element.style.background;
     }
 
     // Fallback para a lógica existente se nenhum valor bruto for encontrado
@@ -1239,6 +1506,18 @@ function setupPropertyListeners() {
         }
     });
     
+    // Listeners para abrir o editor de gradiente
+    const gradientButtons = document.querySelectorAll('#object-inspector [data-action="open-gradient-editor"]');
+    gradientButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            const target = e.currentTarget;
+            const property = target.dataset.property;
+            // O ID pode não existir para propriedades de componentes, e tudo bem.
+            const id = target.dataset.id || '';
+            openGradientEditor(property, id);
+        });
+    });
+
     // Listeners de posição
     const xInput = document.getElementById('prop-x');
     const yInput = document.getElementById('prop-y');
@@ -1410,6 +1689,15 @@ function applyPropertyToComponent(component, property, value) {
 
     // This is the logic moved from updateComponentProperty
     switch (property) {
+        case 'backgroundColor':
+            if (typeof value === 'string' && value.includes('gradient')) {
+                element.style.background = value;
+                element.style.backgroundColor = ''; // Limpa a cor sólida para não interferir
+            } else {
+                element.style.background = ''; // Limpa o gradiente
+                element.style.backgroundColor = value;
+            }
+            break;
         case 'text':
             if (element.tagName === 'LABEL' && element.querySelector('input[type="checkbox"]')) {
                 const checkbox = element.querySelector('input[type="checkbox"]');
@@ -1591,6 +1879,9 @@ function populateGlobalInspector() {
             saveState();
         });
     }
+
+    // Garante que os listeners para elementos dinâmicos (como o botão de gradiente) sejam anexados
+    setupPropertyListeners();
 }
 
 // Sistema de eventos
