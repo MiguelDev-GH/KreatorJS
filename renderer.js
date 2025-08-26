@@ -2518,10 +2518,12 @@ function formatActionValue(value) {
 // Renderizar item de ação
 function renderActionItem(action, index) {
     const escapedValue = (action.value || '').replace(/"/g, '&quot;');
-    const escapedCondition = action.condition ? JSON.stringify(action.condition).replace(/'/g, "\\'") : '';
+    const hasCondition = action.condition && (action.condition.clauses ? action.condition.clauses.length > 0 : action.condition.target);
+    const escapedCondition = hasCondition ? JSON.stringify(action.condition).replace(/'/g, "\\'") : '';
+    const actionItemClass = `action-item ${hasCondition ? 'conditional' : ''}`;
+
     let actionTitle = '';
     let actionDetails = '';
-
     const highlight = (val) => formatActionValue(val);
 
     switch (action.actionType) {
@@ -2588,49 +2590,50 @@ function renderActionItem(action, index) {
             break;
 
         default:
-            // Fallback for other actions
-            actionTitle = action.actionName || action.actionType.replace(/_/g, ' '); // Use actionName or format actionType
+            actionTitle = action.actionName || action.actionType.replace(/_/g, ' ');
             actionDetails = `Alvo: <span style="color: #4ec9b0;">${action.targetId || 'Global'}</span> | Valor: ${highlight(action.value)}`;
             break;
     }
 
     let conditionDetails = '';
-    let conditionButtonClass = '';
-    if (action.condition && action.condition.target) {
-        const { target, operator, value } = action.condition;
-        // Sanitize the operator to prevent injection issues, although it comes from a select menu
-        const safeOperator = ['==', '!=', '>', '<', '>=', '<=', 'contains', 'not_contains'].includes(operator) ? operator : '==';
-        const targetName = target.startsWith('var:') ? target.substring(4) : target.substring(5);
+    if (hasCondition) {
+        const { type, clauses } = action.condition;
+        const conditionText = clauses.map(c => {
+            const safeOperator = ['==', '!=', '>', '<', '>=', '<=', 'contains', 'not_contains'].includes(c.operator) ? c.operator : '==';
+            const targetName = c.target.startsWith('var:') ? c.target.substring(4) : c.target.substring(5);
+            return `Se ${targetName} ${safeOperator} ${highlight(c.value)}`;
+        }).join(type === 'AND' ? ' E ' : ' OU ');
+
         conditionDetails = `
-            <div style="font-size: 11px; color: #569cd6; margin-top: 5px; padding-top: 5px; border-top: 1px solid #4a4a4a;">
-                <strong>Condição:</strong> Se ${targetName} ${safeOperator} ${highlight(value)}
+            <div style="font-size: 11px; color: #ffc107; margin-top: 8px; padding-top: 8px; border-top: 1px solid #4a4a4a;">
+                <strong>Condição (${type}):</strong> ${conditionText}
             </div>
         `;
-        conditionButtonClass = 'active';
     }
 
     return `
-        <div class="action-item" draggable="true" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${escapedValue}" data-action-condition='${escapedCondition}' style="
-            padding: 12px;
-            margin-bottom: 8px;
-            border: 1px solid #5a5a5a;
-            border-radius: 6px;
-            background: #3c3c3c;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: all 0.2s;
-        " onmouseover="this.style.backgroundColor='#4a4a4a'" onmouseout="this.style.backgroundColor='#3c3c3c'">
-            <div>
-                <div style="font-weight: bold; color: #d4d4d4; margin-bottom: 4px; cursor: move;">${actionTitle}</div>
-                <div style="font-size: 12px; color: #cccccc;">
+        <div class="${actionItemClass}" draggable="true" data-index="${index}" data-target-id="${action.targetId || 'global'}" data-action-type="${action.actionType}" data-action-value="${escapedValue}" data-action-condition='${escapedCondition}'>
+            <div style="flex-grow: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: bold; color: #d4d4d4; cursor: move;">${actionTitle}</div>
+                    <div style="display: flex; gap: 5px;">
+                        <button class="edit-action btn btn-small" data-index="${index}">Editar</button>
+                        <button class="remove-action btn btn-small btn-danger" data-index="${index}">Remover</button>
+                    </div>
+                </div>
+                <div style="font-size: 12px; color: #cccccc; margin-bottom: 10px;">
                    ${actionDetails}
                 </div>
+                <div class="condition-controls" style="padding-top: 10px; border-top: 1px solid #4a4a4a;">
+                    <label style="font-size: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" class="enable-condition-checkbox" data-index="${index}" ${hasCondition ? 'checked' : ''}>
+                        Ativar Condição
+                    </label>
+                    <button class="edit-condition-btn btn btn-small" data-index="${index}" style="margin-left: 10px; background-color: #28a745;" ${!hasCondition ? 'disabled' : ''}>
+                        Editar Condição
+                    </button>
+                </div>
                 ${conditionDetails}
-            </div>
-            <div style="display: flex; gap: 5px;">
-                <button class="edit-action btn" data-index="${index}">Editar</button>
-                <button class="remove-action btn" data-index="${index}" style="background-color: #dc3545;">Remover</button>
             </div>
         </div>
     `;
@@ -4273,24 +4276,330 @@ function getAllComponentsForSelection(currentComponentId) {
     return result;
 }
 
+function getComponentProperties(componentId) {
+    const component = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
+    if (!component) return [];
+
+    const componentType = component.dataset.componentType;
+    const componentDef = componentLibrary.find(c => c.type === componentType);
+    if (!componentDef) return [];
+
+    // Start with properties from the definition
+    let properties = Object.keys(componentDef.defaultProps);
+
+    // Add common dynamic properties
+    properties.push('x', 'y');
+
+    // Add type-specific dynamic properties
+    if (['input', 'textarea', 'select'].includes(componentType)) {
+        if (!properties.includes('value')) properties.push('value');
+    }
+    if (componentType === 'checkbox') {
+        if (!properties.includes('checked')) properties.push('checked');
+    }
+
+    // Add common style properties that might not be in defaultProps
+    const commonStyleProps = ['color', 'backgroundColor', 'fontSize', 'width', 'height', 'border', 'opacity', 'transform'];
+    commonStyleProps.forEach(p => {
+        if (!properties.includes(p)) properties.push(p);
+    });
+
+    return properties.sort();
+}
+
+function showConditionEditorModal(action, index, callback) {
+    const modalId = 'condition-editor-modal';
+    if (document.getElementById(modalId)) return;
+
+    const existingCondition = action.condition || { type: 'AND', clauses: [{ target: '', operator: '==', value: '' }] };
+
+    const modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    modal.style.cssText = `
+        display: flex;
+        z-index: 10001; /* On top of event editor */
+    `;
+
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    modalContent.style.maxWidth = '700px';
+    modalContent.style.height = 'auto';
+
+    modalContent.innerHTML = `
+        <div class="modal-header">
+            <h3>Editor de Condição para Ação ${index}</h3>
+            <button class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="property-item" style="margin-bottom: 20px;">
+                <label class="property-label">Executar ação se:</label>
+                <select id="condition-type" class="property-input" style="width: 150px;">
+                    <option value="AND" ${existingCondition.type === 'AND' ? 'selected' : ''}>Todas as condições</option>
+                    <option value="OR" ${existingCondition.type === 'OR' ? 'selected' : ''}>Qualquer condição</option>
+                </select>
+                <span style="font-size: 12px; color: #9d9d9d;">forem atendidas.</span>
+            </div>
+            <div id="condition-clauses-container">
+                <!-- Clauses will be rendered here -->
+            </div>
+            <button id="add-clause-btn" class="btn" style="margin-top: 10px;">+ Adicionar Condição</button>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel">Cancelar</button>
+            <button id="btn-save-condition" class="btn primary">Salvar Condição</button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    modal.appendChild(modalContent);
+
+    const clausesContainer = document.getElementById('condition-clauses-container');
+    const addClauseBtn = document.getElementById('add-clause-btn');
+    const saveBtn = document.getElementById('btn-save-condition');
+    const cancelBtn = modal.querySelector('.btn-cancel');
+    const closeBtn = modal.querySelector('.close-btn');
+
+    let currentClauses = JSON.parse(JSON.stringify(existingCondition.clauses));
+
+    const renderClauses = () => {
+        clausesContainer.innerHTML = '';
+        if (currentClauses.length === 0) {
+            clausesContainer.innerHTML = '<p style="color: #9d9d9d; text-align: center;">Adicione uma condição para começar.</p>';
+        } else {
+            currentClauses.forEach((clause, clauseIndex) => {
+                const clauseEl = document.createElement('div');
+                clauseEl.className = 'property-item';
+                clauseEl.style.cssText = 'background: #2d2d30; padding: 15px; border-radius: 4px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr auto; gap: 10px;';
+                
+                const targetOptions = [
+                    ...Object.keys(projectVariables).map(v => ({ id: `var:${v}`, name: `Variável: ${v}` })),
+                    ...getAllComponentsForSelection().map(c => ({ id: `prop:${c.id}`, name: `Componente: ${c.id}` }))
+                ];
+
+                const operators = [
+                    { id: '==', name: 'Igual a (==)' },
+                    { id: '!=', name: 'Diferente de (!=)' },
+                    { id: '>', name: 'Maior que (>)' },
+                    { id: '<', name: 'Menor que (<)' },
+                    { id: '>=', name: 'Maior ou igual a (>=)' },
+                    { id: '<=', name: 'Menor ou igual a (<=)' },
+                    { id: 'contains', name: 'Contém' },
+                    { id: 'not_contains', name: 'Não contém' },
+                ];
+
+                const clauseControls = document.createElement('div');
+                clauseControls.style.cssText = 'display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;';
+
+                let currentTargetId = '';
+                let currentProperty = '';
+                if (clause.target) {
+                    if (clause.target.startsWith('var:')) {
+                        currentTargetId = clause.target;
+                    } else if (clause.target.startsWith('prop:')) {
+                        const parts = clause.target.substring(5).split('.');
+                        currentTargetId = `comp:${parts[0]}`;
+                        currentProperty = parts[1];
+                    }
+                }
+
+                const targetSelectOptions = [
+                    { id: '', name: 'Selecione um Alvo...' },
+                    ...Object.keys(projectVariables).map(v => ({ id: `var:${v}`, name: `Variável: ${v}` })),
+                    ...getAllComponentsForSelection().map(c => ({ id: `comp:${c.id}`, name: `Componente: ${c.id}` }))
+                ];
+
+                clauseControls.innerHTML = `
+                    <div>
+                        <label class="property-label">Alvo</label>
+                        <select class="condition-target-select property-input" data-clause-index="${clauseIndex}">
+                            ${targetSelectOptions.map(o => `<option value="${o.id}" ${o.id === currentTargetId ? 'selected' : ''}>${o.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="property-label">Propriedade</label>
+                        <select class="condition-property-select property-input" data-clause-index="${clauseIndex}" ${!currentTargetId.startsWith('comp:') ? 'disabled' : ''}>
+                            <!-- Propriedades carregadas dinamicamente -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="property-label">Operador</label>
+                        <select class="condition-operator-select property-input" data-clause-index="${clauseIndex}">
+                            ${operators.map(o => `<option value="${o.id}" ${clause.operator === o.id ? 'selected' : ''}>${o.name}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="property-label">Valor</label>
+                        <input type="text" class="condition-value-input property-input" data-clause-index="${clauseIndex}" value="${clause.value || ''}">
+                    </div>
+                `;
+
+                const removeButtonContainer = document.createElement('div');
+                removeButtonContainer.style.cssText = 'display: flex; align-items: flex-end;';
+                removeButtonContainer.innerHTML = `<button class="remove-clause-btn btn btn-danger" data-clause-index="${clauseIndex}" style="height: fit-content;">&times;</button>`;
+                
+                clauseEl.appendChild(clauseControls);
+                clauseEl.appendChild(removeButtonContainer);
+                clausesContainer.appendChild(clauseEl);
+            });
+
+            // After rendering, populate properties for existing selections
+            document.querySelectorAll('.condition-target-select').forEach(populateProperties);
+        }
+    };
+
+    const closeModal = () => {
+        modal.remove();
+    };
+
+    addClauseBtn.addEventListener('click', () => {
+        currentClauses.push({ target: '', operator: '==', value: '' });
+        renderClauses();
+    });
+
+    const updateClauseTarget = (clauseIndex, targetId, property) => {
+        if (targetId.startsWith('var:')) {
+            currentClauses[clauseIndex].target = targetId;
+        } else if (targetId.startsWith('comp:') && property) {
+            const componentId = targetId.substring(5);
+            currentClauses[clauseIndex].target = `prop:${componentId}.${property}`;
+        } else {
+            currentClauses[clauseIndex].target = '';
+        }
+    };
+
+    const populateProperties = (targetSelectElement) => {
+        const selectedTarget = targetSelectElement.value;
+        const clauseIndex = parseInt(targetSelectElement.dataset.clauseIndex);
+        const clauseRow = targetSelectElement.closest('.property-item');
+        const propertySelect = clauseRow.querySelector('.condition-property-select');
+
+        propertySelect.innerHTML = '';
+        if (selectedTarget.startsWith('comp:')) {
+            propertySelect.disabled = false;
+            const componentId = selectedTarget.substring(5);
+            const properties = getComponentProperties(componentId);
+            properties.forEach(prop => {
+                const option = document.createElement('option');
+                option.value = prop;
+                option.textContent = prop;
+                propertySelect.appendChild(option);
+            });
+            // Restore selection if it exists
+            const currentProperty = currentClauses[clauseIndex].target?.split('.')[1];
+            if (currentProperty) {
+                propertySelect.value = currentProperty;
+            }
+        } else {
+            propertySelect.disabled = true;
+        }
+        // Update the data model after populating
+        updateClauseTarget(clauseIndex, selectedTarget, propertySelect.value);
+    };
+
+    clausesContainer.addEventListener('change', (e) => {
+        const clauseIndex = parseInt(e.target.dataset.clauseIndex);
+        if (isNaN(clauseIndex)) return;
+
+        const clauseRow = e.target.closest('.property-item');
+        const targetSelect = clauseRow.querySelector('.condition-target-select');
+        const propertySelect = clauseRow.querySelector('.condition-property-select');
+
+        if (e.target.classList.contains('condition-target-select')) {
+            populateProperties(e.target);
+            // The target is updated inside populateProperties
+        } else if (e.target.classList.contains('condition-property-select')) {
+            updateClauseTarget(clauseIndex, targetSelect.value, e.target.value);
+        } else if (e.target.classList.contains('condition-operator-select')) {
+            currentClauses[clauseIndex].operator = e.target.value;
+        } else if (e.target.classList.contains('condition-value-input')) {
+            currentClauses[clauseIndex].value = e.target.value;
+        }
+    });
+    
+    clausesContainer.addEventListener('click', (e) => {
+        if (e.target.classList.contains('remove-clause-btn')) {
+            const clauseIndex = parseInt(e.target.dataset.clauseIndex);
+            currentClauses.splice(clauseIndex, 1);
+            renderClauses();
+        }
+    });
+
+    saveBtn.addEventListener('click', () => {
+        const conditionType = document.getElementById('condition-type').value;
+        
+        // Filter out empty clauses
+        const finalClauses = currentClauses.filter(c => c.target && c.operator);
+
+        if (finalClauses.length === 0) {
+            callback(null); // No valid conditions, so pass null
+        } else {
+            const newCondition = {
+                type: conditionType,
+                clauses: finalClauses
+            };
+            callback(newCondition);
+        }
+        closeModal();
+    });
+
+    cancelBtn.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+
+    renderClauses();
+}
+
 // Configurar listeners para ações existentes
 function setupActionListeners(eventName, componentType, componentId, currentActions) {
-    // Listener para remover ação
-    document.querySelectorAll('.remove-action').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const index = parseInt(e.target.dataset.index);
+    const isGlobal = componentType === 'global';
+    const actionContainer = document.getElementById('actions-list');
+
+    actionContainer.addEventListener('click', (e) => {
+        const target = e.target;
+        const index = parseInt(target.dataset.index);
+        
+        if (target.classList.contains('remove-action')) {
             removeAction(index);
-        });
-    });
-
-    // Listener para editar ação
-    document.querySelectorAll('.edit-action').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const index = parseInt(e.target.dataset.index);
+        } else if (target.classList.contains('edit-action')) {
             editAction(index, currentActions);
-        });
+        } else if (target.classList.contains('edit-condition-btn')) {
+            const action = currentActions[index];
+            showConditionEditorModal(action, index, (newCondition) => {
+                // Update the condition in the data model
+                action.condition = newCondition;
+                saveState();
+                loadActionsEditor(eventName, componentType, componentId); // Refresh UI
+            });
+        }
     });
 
+    actionContainer.addEventListener('change', (e) => {
+        const target = e.target;
+        const index = parseInt(target.dataset.index);
+
+        if (target.classList.contains('enable-condition-checkbox')) {
+            const editBtn = document.querySelector(`.edit-condition-btn[data-index="${index}"]`);
+            const action = currentActions[index];
+
+            if (target.checked) {
+                editBtn.disabled = false;
+                // If there's no condition, open the editor to create one
+                if (!action.condition || !action.condition.clauses || action.condition.clauses.length === 0) {
+                    showConditionEditorModal(action, index, (newCondition) => {
+                        action.condition = newCondition;
+                        saveState();
+                        loadActionsEditor(eventName, componentType, componentId);
+                    });
+                }
+            } else {
+                // Remove condition when unchecked
+                editBtn.disabled = true;
+                delete action.condition;
+                saveState();
+                loadActionsEditor(eventName, componentType, componentId); // Refresh UI
+            }
+        }
+    });
 }
 
 // Editar uma ação existente
@@ -4376,6 +4685,11 @@ function saveAction(originalAction = null) {
         actionType: actionType,
         value: actionValue
     };
+
+    // Preserve the existing condition when editing an action's main parameters
+    if (originalAction && originalAction.condition) {
+        newAction.condition = originalAction.condition;
+    }
     
     const isGlobal = !selectedComponent;
     const componentId = isGlobal ? 'global' : selectedComponent.dataset.componentId;
@@ -4402,7 +4716,13 @@ function saveAction(originalAction = null) {
     }
 
     if (editingActionIndex !== null) {
-        if (actions) actions[editingActionIndex] = newAction;
+        if (actions) {
+            // Also preserve the original condition if the new action doesn't have one
+            if (actions[editingActionIndex].condition && !newAction.condition) {
+                newAction.condition = actions[editingActionIndex].condition;
+            }
+            actions[editingActionIndex] = newAction;
+        }
     } else {
         if (actions) actions.push(newAction);
     }
@@ -4486,24 +4806,31 @@ function rgbToHex(rgb) {
 
 function getPropertyValue(element, property) {
     if (!element) return '';
-    const computedStyle = window.getComputedStyle(element);
-    let value = computedStyle[property];
-    if (!value) value = element.style[property];
-    
+
+    // Handle special properties first
     switch (property) {
-        case 'text': return element.textContent || element.value || '';
-        case 'value': return element.value || '';
-        case 'placeholder': return element.placeholder || '';
-        case 'src': return element.src || '';
-        case 'alt': return element.alt || '';
-        case 'checked': return element.checked || false;
-        case 'backgroundColor':
-        case 'color':
-        case 'borderColor':
-            return rgbToHex(value);
-        default:
-            return value || '';
+        case 'text':
+            return (element.textContent || element.value || '').trim();
+        case 'value':
+            return element.value;
+        case 'checked':
+            return element.checked;
+        case 'x':
+            return element.style.left;
+        case 'y':
+            return element.style.top;
     }
+
+    // Fallback to computed style for CSS properties
+    const computedStyle = window.getComputedStyle(element);
+    let value = computedStyle[property] || element.style[property] || '';
+
+    // Handle color properties that might be in rgb format
+    if (property.toLowerCase().includes('color')) {
+        return rgbToHex(value);
+    }
+    
+    return value;
 }
 
 function showElement(id) {
@@ -4536,6 +4863,48 @@ function changeText(id, text) {
             element.textContent = text;
         }
     }
+}
+
+function checkCondition(condition) {
+    if (!condition || !condition.clauses || condition.clauses.length === 0) {
+        return true; // No condition means the action should run
+    }
+
+    const evaluateClause = (clause) => {
+        let targetValue;
+        if (clause.target.startsWith('var:')) {
+            const varName = clause.target.substring(4);
+            targetValue = projectVariables[varName] ? projectVariables[varName].value : undefined;
+        } else if (clause.target.startsWith('prop:')) {
+            const [componentId, propName] = clause.target.substring(5).split('.');
+            const element = getElementById(componentId);
+            if (element) {
+                targetValue = getPropertyValue(element, propName);
+            }
+        }
+
+        const conditionValue = clause.value;
+
+        switch (clause.operator) {
+            case '==': return targetValue == conditionValue;
+            case '!=': return targetValue != conditionValue;
+            case '>': return Number(targetValue) > Number(conditionValue);
+            case '<': return Number(targetValue) < Number(conditionValue);
+            case '>=': return Number(targetValue) >= Number(conditionValue);
+            case '<=': return Number(targetValue) <= Number(conditionValue);
+            case 'contains': return String(targetValue).includes(String(conditionValue));
+            case 'not_contains': return !String(targetValue).includes(String(conditionValue));
+            default: return false;
+        }
+    };
+
+    if (condition.type === 'AND') {
+        return condition.clauses.every(evaluateClause);
+    } else if (condition.type === 'OR') {
+        return condition.clauses.some(evaluateClause);
+    }
+
+    return false;
 }
 
 function applyStyles(id, styles) {
@@ -4914,6 +5283,14 @@ function generateActionCode(action) {
     // Se não houver lógica de ação, não retorne nada.
     if (!actionLogic) {
         return '';
+    }
+
+    // Wrap the action logic in a condition check if a condition exists
+    if (action.condition && action.condition.clauses && action.condition.clauses.length > 0) {
+        const conditionObjectStr = JSON.stringify(action.condition);
+        // Indent the original action logic
+        const indentedActionLogic = actionLogic.split('\n').map(line => line ? '    ' + line : '').join('\n');
+        return `    if (checkCondition(${conditionObjectStr})) {\n${indentedActionLogic}    }\n`;
     }
 
     return actionLogic;

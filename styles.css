@@ -1564,6 +1564,9 @@ button[style*="font-size: 12px"]:hover {
 .action-item:hover {
     background: #4a4a4a;
 }
+.action-item.conditional {
+    border-left: 4px solid #ffc107; /* Amarelo para indicar condição */
+}
 .action-header {
     display: flex;
     justify-content: space-between;
