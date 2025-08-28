@@ -82,7 +82,7 @@ const componentLibrary = [
         type: 'button',
         name: 'Botão',
         description: 'Botão clicável',
-        icon: '🔘',
+        icon: '<img src="assets/🔘.png" width="20px">',
         defaultProps: {
             text: 'Botão',
             width: '100px',
@@ -132,7 +132,7 @@ const componentLibrary = [
         type: 'div',
         name: 'Painel',
         description: 'Container genérico',
-        icon: '📦',
+        icon: '<img src="assets/📦.png" width="20px">',
         defaultProps: {
             width: '200px',
             height: '100px',
@@ -4227,21 +4227,47 @@ function renderComponentTree() {
 function buildTree(component, parentList, depth) {
     const componentId = component.dataset.componentId;
     const componentType = component.dataset.componentType;
-    
+    const componentDef = componentLibrary.find(c => c.type === componentType);
+
     const listItem = document.createElement('li');
     
     const item = document.createElement('div');
     item.className = 'component-tree-item';
-    item.textContent = `${componentId} (${componentType})`;
     item.dataset.componentId = componentId;
-    item.style.paddingLeft = `${10 + depth * 15}px`; // Indentation
+    
+    // Alinhamento e indentação
+    item.style.paddingLeft = `${10 + depth * 20}px`;
+
+    // Verifica se é um container e se tem filhos
+    const isContainer = componentType === 'div';
+    const containerElement = isContainer ? component.querySelector('.component-container') : null;
+    const childComponents = containerElement ? Array.from(containerElement.children).filter(el => el.classList.contains('designer-component')) : [];
+    const hasChildren = childComponents.length > 0;
+
+    // Adiciona a seta para containers que têm filhos
+    let arrow = '';
+    if (isContainer && hasChildren) {
+        arrow = `<span class="component-tree-arrow">▼</span>`;
+    } else {
+        // Adiciona um espaço para manter o alinhamento
+        arrow = `<span class="component-tree-arrow" style="visibility: hidden;">►</span>`;
+    }
+    
+    // Ícone do componente
+    const icon = `<span class="component-tree-icon">${componentDef ? componentDef.icon : '❓'}</span>`;
+    
+    // Nome do componente
+    const name = `<span class="component-tree-name">${componentId}</span>`;
+
+    // Monta o HTML do item
+    item.innerHTML = `${arrow} ${icon} ${name}`;
 
     if (selectedComponent === component) {
         item.classList.add('selected');
     }
 
     item.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent parent items from being clicked
+        e.stopPropagation(); // Previne que o clique se propague para itens pais
         const targetComponent = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
         if (targetComponent) {
             selectComponent(targetComponent);
@@ -4251,23 +4277,16 @@ function buildTree(component, parentList, depth) {
     listItem.appendChild(item);
     parentList.appendChild(listItem);
 
-    // Check for children if it's a container
-    if (componentType === 'div') {
-        const containerElement = component.querySelector('.component-container');
-        if (!containerElement) return; // Safety check
-
-        const childComponents = Array.from(containerElement.children).filter(el => el.classList.contains('designer-component'));
+    // Se tiver filhos, constrói a sub-árvore recursivamente
+    if (hasChildren) {
+        const childList = document.createElement('ul');
+        childList.style.listStyle = 'none';
+        childList.style.paddingLeft = '0'; // A indentação é controlada pelo padding do item
         
-        if (childComponents.length > 0) {
-            const childList = document.createElement('ul');
-            childList.style.listStyle = 'none';
-            childList.style.paddingLeft = '0';
-            
-            childComponents.forEach(child => {
-                buildTree(child, childList, depth + 1);
-            });
-            listItem.appendChild(childList);
-        }
+        childComponents.forEach(child => {
+            buildTree(child, childList, depth + 1);
+        });
+        listItem.appendChild(childList);
     }
 }
 
