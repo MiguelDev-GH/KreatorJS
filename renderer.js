@@ -27,6 +27,7 @@ let canvasPanY = 0;
 let isPanning = false;
 let isSpacePressed = false;
 let lastMousePos = { x: 0, y: 0 };
+let lastDragOverTarget = null;
 
 // Função para aplicar a transformação ao canvas
 function updateCanvasTransform() {
@@ -137,7 +138,14 @@ const componentLibrary = [
             height: '100px',
             backgroundColor: '#f0f0f0',
             border: '1px solid #ccc',
-            borderRadius: '4px'
+            borderRadius: '4px',
+            layoutMode: 'absolute', // 'absolute' or 'flex'
+            // Flexbox properties
+            flexDirection: 'row',
+            justifyContent: 'flex-start',
+            alignItems: 'stretch',
+            flexWrap: 'nowrap',
+            gap: '0px'
         },
         html: '<div></div>'
     },
@@ -429,51 +437,93 @@ function handleDragStart(e) {
     
     // Melhorar feedback visual
     e.dataTransfer.effectAllowed = 'copy';
+
+    // Clear any previous drag-over state
+    if (lastDragOverTarget) {
+        lastDragOverTarget.classList.remove('drag-over');
+        lastDragOverTarget = null;
+    }
 }
 
 function handleDragEnd(e) {
     e.target.classList.remove('dragging');
+    // Clean up drag-over class from the last target
+    if (lastDragOverTarget) {
+        lastDragOverTarget.classList.remove('drag-over');
+        lastDragOverTarget = null;
+    }
 }
 
 function handleDragOver(e) {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'copy';
-    e.currentTarget.classList.add('drag-over');
+
+    const currentTarget = e.currentTarget;
+
+    // Remove highlight from previous target if it's different
+    if (lastDragOverTarget && lastDragOverTarget !== currentTarget) {
+        lastDragOverTarget.classList.remove('drag-over');
+    }
+
+    // Add highlight to current target
+    currentTarget.classList.add('drag-over');
+    lastDragOverTarget = currentTarget;
 }
 
 function handleDragLeave(e) {
-    // Só remover se realmente saiu da área
-    if (!e.currentTarget.contains(e.relatedTarget)) {
-        e.currentTarget.classList.remove('drag-over');
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('drag-over');
+    if (lastDragOverTarget === e.currentTarget) {
+        lastDragOverTarget = null;
     }
 }
 
 function handleDrop(e) {
     e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
+    e.stopPropagation(); // Stop bubbling to parent containers or canvas
+    
+    const currentTarget = e.currentTarget;
+    currentTarget.classList.remove('drag-over');
+    lastDragOverTarget = null; // Reset on drop
     
     const componentType = e.dataTransfer.getData('text/plain');
     if (!componentType) return;
 
-    const visualDesigner = document.getElementById('visual-designer');
-    if (!visualDesigner) return;
-    
-    const designerRect = visualDesigner.getBoundingClientRect();
-    const viewportX = e.clientX - designerRect.left;
-    const viewportY = e.clientY - designerRect.top;
+    let parentComponentWrapper = null;
+    let x, y;
 
-    // Transform viewport coordinates to canvas coordinates
-    const x = (viewportX - canvasPanX) / canvasScale;
-    const y = (viewportY - canvasPanY) / canvasScale;
+    // Check if we dropped on a container or the main canvas
+    if (currentTarget.classList.contains('component-container')) {
+        parentComponentWrapper = currentTarget.closest('.designer-component');
+        const parentRect = currentTarget.getBoundingClientRect();
+        
+        const dropXInParent = e.clientX - parentRect.left;
+        const dropYInParent = e.clientY - parentRect.top;
+        
+        // The child position is relative to the parent, but needs to be scaled
+        x = dropXInParent / canvasScale;
+        y = dropYInParent / canvasScale;
+
+    } else { // Dropped on the main canvas
+        const visualDesigner = document.getElementById('visual-designer');
+        const designerRect = visualDesigner.getBoundingClientRect();
+        const viewportX = e.clientX - designerRect.left;
+        const viewportY = e.clientY - designerRect.top;
+
+        x = (viewportX - canvasPanX) / canvasScale;
+        y = (viewportY - canvasPanY) / canvasScale;
+    }
     
-    // Criar componente imediatamente
+    // Create component immediately
     setTimeout(() => {
-        createComponent(componentType, Math.max(0, x), Math.max(0, y));
+        createComponent(componentType, Math.round(x), Math.round(y), null, parentComponentWrapper);
     }, 10);
 }
 
 // Criar componente no designer
-function createComponent(type, x, y, initialProps = null) {
+function createComponent(type, x, y, initialProps = null, parentComponentWrapper = null) {
     const componentDef = componentLibrary.find(c => c.type === type);
     if (!componentDef) return;
     
@@ -493,20 +543,32 @@ function createComponent(type, x, y, initialProps = null) {
     const html = generateComponentHTML(componentDef, props);
     wrapper.innerHTML = html + '<div class="resize-handle"></div><div class="move-handle">✢</div>';
     
+    // If it's a div, it can be a container. Add a class and required styles to its inner element.
+    if (type === 'div') {
+        const innerElement = wrapper.firstElementChild;
+        innerElement.classList.add('component-container');
+        innerElement.style.position = 'relative'; // Crucial for child absolute positioning
+        innerElement.style.overflow = 'hidden'; // Contain children within the panel
+    }
+
     // Aplicar estilos
     applyComponentStyles(wrapper, props);
     
     // Eventos do componente
     setupComponentEvents(wrapper);
     
-    // Adicionar ao canvas
-    const canvas = document.getElementById('designer-canvas');
-    const placeholder = canvas.querySelector('.canvas-placeholder');
-    if (placeholder) {
-        placeholder.style.display = 'none';
+    // Adicionar ao canvas ou ao parente
+    if (parentComponentWrapper) {
+        const parentInnerElement = parentComponentWrapper.firstElementChild;
+        parentInnerElement.appendChild(wrapper);
+    } else {
+        const canvas = document.getElementById('designer-canvas');
+        const placeholder = canvas.querySelector('.canvas-placeholder');
+        if (placeholder) {
+            placeholder.style.display = 'none';
+        }
+        canvas.appendChild(wrapper);
     }
-    
-    canvas.appendChild(wrapper);
     
     // Selecionar o novo componente
     selectComponent(wrapper);
@@ -537,6 +599,65 @@ function duplicateComponent(sourceComponent) {
     logToConsole(`Componente ${sourceComponent.dataset.componentId} duplicado.`, 'success');
 }
 
+function updateContainerLayout(containerComponent) {
+    const containerElement = containerComponent.firstElementChild;
+    if (!containerElement || containerComponent.dataset.componentType !== 'div') {
+        return;
+    }
+
+    const props = extractComponentProperties(containerComponent);
+    const layoutMode = props.layoutMode || 'absolute';
+
+    if (layoutMode === 'flex') {
+        containerElement.style.display = 'flex';
+        containerElement.style.flexDirection = props.flexDirection || 'row';
+        containerElement.style.justifyContent = props.justifyContent || 'flex-start';
+        containerElement.style.alignItems = props.alignItems || 'stretch';
+        containerElement.style.flexWrap = props.flexWrap || 'nowrap';
+        containerElement.style.gap = props.gap || '0px';
+
+        const childComponents = Array.from(containerElement.children).filter(el => el.classList.contains('designer-component'));
+        childComponents.forEach(child => {
+            // Store absolute position if it's not already stored
+            if (child.style.position === 'absolute') {
+                child.dataset.absPosX = child.style.left;
+                child.dataset.absPosY = child.style.top;
+            }
+            child.style.position = 'relative';
+            child.style.left = '';
+            child.style.top = '';
+            child.style.zIndex = ''; // Let flexbox handle order
+
+            // Hide handles
+            const moveHandle = child.querySelector('.move-handle');
+            const resizeHandle = child.querySelector('.resize-handle');
+            if (moveHandle) moveHandle.style.display = 'none';
+            if (resizeHandle) resizeHandle.style.display = 'none';
+        });
+
+    } else { // 'absolute' mode
+        containerElement.style.display = 'block';
+        containerElement.style.flexDirection = '';
+        containerElement.style.justifyContent = '';
+        containerElement.style.alignItems = '';
+        containerElement.style.flexWrap = '';
+        containerElement.style.gap = '';
+
+        const childComponents = Array.from(containerElement.children).filter(el => el.classList.contains('designer-component'));
+        childComponents.forEach(child => {
+            child.style.position = 'absolute';
+            child.style.left = child.dataset.absPosX || '0px';
+            child.style.top = child.dataset.absPosY || '0px';
+
+            // Show handles
+            const moveHandle = child.querySelector('.move-handle');
+            const resizeHandle = child.querySelector('.resize-handle');
+            if (moveHandle) moveHandle.style.display = '';
+            if (resizeHandle) resizeHandle.style.display = '';
+        });
+    }
+}
+
 // Gerar HTML do componente
 function generateComponentHTML(componentDef, props) {
     let html = componentDef.html;
@@ -559,7 +680,9 @@ function applyComponentStyles(wrapper, props) {
     
     // Aplicar estilos CSS
     Object.keys(props).forEach(key => {
-        if (key !== 'text' && key !== 'placeholder' && key !== 'src' && key !== 'alt' && key !== 'checked') {
+        // Exclude properties that are not direct styles or are handled by updateContainerLayout
+        const nonStyleProps = ['text', 'placeholder', 'src', 'alt', 'checked', 'layoutMode', 'flexDirection', 'justifyContent', 'alignItems', 'flexWrap', 'gap'];
+        if (!nonStyleProps.includes(key)) {
             element.style[key] = props[key];
         }
     });
@@ -567,6 +690,11 @@ function applyComponentStyles(wrapper, props) {
     // Estilos do wrapper
     if (props.width) wrapper.style.width = props.width;
     if (props.height) wrapper.style.height = props.height;
+
+    // If it's a container, apply its layout rules, which also handles flex properties
+    if (wrapper.dataset.componentType === 'div') {
+        updateContainerLayout(wrapper);
+    }
 }
 
 // Configurar eventos do componente
@@ -601,8 +729,30 @@ function setupComponentEvents(wrapper) {
                 }
 
                 if (isDraggingComponent) {
-                    const newX = Math.max(0, componentStartPos.x + (deltaX / canvasScale));
-                    const newY = Math.max(0, componentStartPos.y + (deltaY / canvasScale));
+                    let newX = componentStartPos.x + (deltaX / canvasScale);
+                    let newY = componentStartPos.y + (deltaY / canvasScale);
+
+                    // Constrain to top and left boundaries (0, 0)
+                    newX = Math.max(0, newX);
+                    newY = Math.max(0, newY);
+
+                    // Constrain to right and bottom boundaries of the parent
+                    const parentElement = wrapper.parentElement;
+                    if (parentElement) {
+                        const parentRect = parentElement.getBoundingClientRect();
+                        const parentWidth = parentRect.width / canvasScale;
+                        const parentHeight = parentRect.height / canvasScale;
+
+                        const childRect = wrapper.getBoundingClientRect();
+                        const childWidth = childRect.width / canvasScale;
+                        const childHeight = childRect.height / canvasScale;
+
+                        const maxX = Math.max(0, parentWidth - childWidth); // Ensure maxX is not negative
+                        const maxY = Math.max(0, parentHeight - childHeight); // Ensure maxY is not negative
+
+                        newX = Math.min(newX, maxX);
+                        newY = Math.min(newY, maxY);
+                    }
 
                     wrapper.style.left = newX + 'px';
                     wrapper.style.top = newY + 'px';
@@ -683,6 +833,14 @@ function setupComponentEvents(wrapper) {
 
         showContextMenu(e, menuItems);
     });
+
+    // If the component is a container, add drop listeners to its inner element
+    if (wrapper.dataset.componentType === 'div') {
+        const containerElement = wrapper.firstElementChild;
+        containerElement.addEventListener('dragover', handleDragOver);
+        containerElement.addEventListener('dragleave', handleDragLeave);
+        containerElement.addEventListener('drop', handleDrop);
+    }
 }
 
 // Prevenir interação com elementos durante o modo design
@@ -964,6 +1122,75 @@ function populateObjectInspector(component) {
     
     // Configurar listeners das propriedades
     setupPropertyListeners();
+
+    // Conditionally add Flexbox properties for containers
+    const layoutMode = getPropertyValue(component.firstElementChild, 'layoutMode');
+    if (componentType === 'div' && layoutMode === 'flex') {
+        const flexProps = {
+            flexDirection: getPropertyValue(component.firstElementChild, 'flexDirection') || 'row',
+            justifyContent: getPropertyValue(component.firstElementChild, 'justifyContent') || 'flex-start',
+            alignItems: getPropertyValue(component.firstElementChild, 'alignItems') || 'stretch',
+            flexWrap: getPropertyValue(component.firstElementChild, 'flexWrap') || 'nowrap',
+            gap: getPropertyValue(component.firstElementChild, 'gap') || '0px'
+        };
+
+        const flexboxHTML = `
+            <div class="property-group">
+                <div class="property-group-title">Layout Flexbox</div>
+                
+                <div class="property-item">
+                    <label class="property-label">Direção (flexDirection)</label>
+                    <select class="property-input" data-property="flexDirection">
+                        <option value="row" ${flexProps.flexDirection === 'row' ? 'selected' : ''}>Row</option>
+                        <option value="column" ${flexProps.flexDirection === 'column' ? 'selected' : ''}>Column</option>
+                        <option value="row-reverse" ${flexProps.flexDirection === 'row-reverse' ? 'selected' : ''}>Row Reverse</option>
+                        <option value="column-reverse" ${flexProps.flexDirection === 'column-reverse' ? 'selected' : ''}>Column Reverse</option>
+                    </select>
+                </div>
+
+                <div class="property-item">
+                    <label class="property-label">Justificar Conteúdo (justifyContent)</label>
+                    <select class="property-input" data-property="justifyContent">
+                        <option value="flex-start" ${flexProps.justifyContent === 'flex-start' ? 'selected' : ''}>Start</option>
+                        <option value="flex-end" ${flexProps.justifyContent === 'flex-end' ? 'selected' : ''}>End</option>
+                        <option value="center" ${flexProps.justifyContent === 'center' ? 'selected' : ''}>Center</option>
+                        <option value="space-between" ${flexProps.justifyContent === 'space-between' ? 'selected' : ''}>Space Between</option>
+                        <option value="space-around" ${flexProps.justifyContent === 'space-around' ? 'selected' : ''}>Space Around</option>
+                        <option value="space-evenly" ${flexProps.justifyContent === 'space-evenly' ? 'selected' : ''}>Space Evenly</option>
+                    </select>
+                </div>
+
+                <div class="property-item">
+                    <label class="property-label">Alinhar Itens (alignItems)</label>
+                    <select class="property-input" data-property="alignItems">
+                        <option value="flex-start" ${flexProps.alignItems === 'flex-start' ? 'selected' : ''}>Start</option>
+                        <option value="flex-end" ${flexProps.alignItems === 'flex-end' ? 'selected' : ''}>End</option>
+                        <option value="center" ${flexProps.alignItems === 'center' ? 'selected' : ''}>Center</option>
+                        <option value="stretch" ${flexProps.alignItems === 'stretch' ? 'selected' : ''}>Stretch</option>
+                        <option value="baseline" ${flexProps.alignItems === 'baseline' ? 'selected' : ''}>Baseline</option>
+                    </select>
+                </div>
+
+                <div class="property-item">
+                    <label class="property-label">Quebra de Linha (flexWrap)</label>
+                    <select class="property-input" data-property="flexWrap">
+                        <option value="nowrap" ${flexProps.flexWrap === 'nowrap' ? 'selected' : ''}>No Wrap</option>
+                        <option value="wrap" ${flexProps.flexWrap === 'wrap' ? 'selected' : ''}>Wrap</option>
+                        <option value="wrap-reverse" ${flexProps.flexWrap === 'wrap-reverse' ? 'selected' : ''}>Wrap Reverse</option>
+                    </select>
+                </div>
+
+                <div class="property-item">
+                    <label class="property-label">Espaçamento (gap)</label>
+                    <input type="text" class="property-input" data-property="gap" value="${flexProps.gap}" placeholder="e.g., 10px">
+                </div>
+
+            </div>
+        `;
+        inspector.innerHTML += flexboxHTML;
+        // Re-run setupPropertyListeners to attach events to the new inputs
+        setupPropertyListeners();
+    }
 
     // Listeners for ID editing
     const saveIdBtn = document.getElementById('btn-save-id');
@@ -1262,6 +1489,21 @@ function generateBasicPropertyInputs(componentDef, component) {
             <div class="property-item">
                 <label class="property-label" title="${tooltip}">Opções da Lista</label>
                 <button type="button" onclick="editSelectOptions(selectedComponent)" style="width: 100%; padding: 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;" title="${tooltip}">Editar Opções</button>
+            </div>
+        `;
+    }
+
+    // Para painel, adicionar seletor de modo de layout
+    if (componentDef.type === 'div') {
+        const layoutMode = getPropertyValue(element, 'layoutMode') || 'absolute';
+        const tooltip = "Define como os filhos são posicionados. Absoluto para arrastar e soltar, Flex para layout automático.";
+        html += `
+            <div class="property-item">
+                <label class="property-label" title="${tooltip}">Modo de Layout</label>
+                <select class="property-input" data-property="layoutMode" onchange="populateObjectInspector(selectedComponent)">
+                    <option value="absolute" ${layoutMode === 'absolute' ? 'selected' : ''}>Absoluto</option>
+                    <option value="flex" ${layoutMode === 'flex' ? 'selected' : ''}>Flex</option>
+                </select>
             </div>
         `;
     }
@@ -1769,6 +2011,12 @@ function updateComponentProperty(property, value) {
 
     // Step 2: Trigger a global update to resolve all dynamic properties.
     updateAllDynamicProperties();
+
+    // If the updated property affects layout, update the container's layout
+    if (selectedComponent.dataset.componentType === 'div' && 
+        (property === 'layoutMode' || ['flexDirection', 'justifyContent', 'alignItems', 'flexWrap', 'gap'].includes(property))) {
+        updateContainerLayout(selectedComponent);
+    }
 
     // Step 3: Save the state for undo/redo.
     saveState();
@@ -3317,7 +3565,7 @@ function loadProjectFromData(projectData) {
     }
     
     // Carregar componentes
-    loadProjectComponents(projectData.components);
+    loadProjectComponents(projectData.components, null);
     
     componentCounter = projectData.componentCounter || 0;
     
@@ -3955,35 +4203,72 @@ function renderComponentTree() {
     if (!treeContent) return;
 
     treeContent.innerHTML = '';
-    const components = document.querySelectorAll('.designer-component');
+    const canvas = document.getElementById('designer-canvas');
 
-    if (components.length === 0) {
+    // Get top-level components only (direct children of the canvas)
+    const topLevelComponents = Array.from(canvas.children).filter(el => el.classList.contains('designer-component'));
+
+    if (topLevelComponents.length === 0) {
         treeContent.innerHTML = '<p style="color: #9d9d9d; font-size: 12px; text-align: center; padding: 10px;">Nenhum componente no projeto.</p>';
         return;
     }
 
-    components.forEach(component => {
-        const componentId = component.dataset.componentId;
-        const componentType = component.dataset.componentType;
-        const item = document.createElement('div');
-        item.className = 'component-tree-item';
-        item.textContent = `${componentId} (${componentType})`;
-        item.dataset.componentId = componentId;
+    const treeRoot = document.createElement('ul');
+    treeRoot.style.listStyle = 'none';
+    treeRoot.style.paddingLeft = '0';
 
-        if (selectedComponent === component) {
-            item.classList.add('selected');
-        }
-
-        item.addEventListener('click', () => {
-            const targetComponent = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
-            if (targetComponent) {
-                selectComponent(targetComponent);
-                targetComponent.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        });
-
-        treeContent.appendChild(item);
+    topLevelComponents.forEach(component => {
+        buildTree(component, treeRoot, 0);
     });
+    
+    treeContent.appendChild(treeRoot);
+}
+
+function buildTree(component, parentList, depth) {
+    const componentId = component.dataset.componentId;
+    const componentType = component.dataset.componentType;
+    
+    const listItem = document.createElement('li');
+    
+    const item = document.createElement('div');
+    item.className = 'component-tree-item';
+    item.textContent = `${componentId} (${componentType})`;
+    item.dataset.componentId = componentId;
+    item.style.paddingLeft = `${10 + depth * 15}px`; // Indentation
+
+    if (selectedComponent === component) {
+        item.classList.add('selected');
+    }
+
+    item.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent parent items from being clicked
+        const targetComponent = document.querySelector(`.designer-component[data-component-id="${componentId}"]`);
+        if (targetComponent) {
+            selectComponent(targetComponent);
+        }
+    });
+    
+    listItem.appendChild(item);
+    parentList.appendChild(listItem);
+
+    // Check for children if it's a container
+    if (componentType === 'div') {
+        const containerElement = component.querySelector('.component-container');
+        if (!containerElement) return; // Safety check
+
+        const childComponents = Array.from(containerElement.children).filter(el => el.classList.contains('designer-component'));
+        
+        if (childComponents.length > 0) {
+            const childList = document.createElement('ul');
+            childList.style.listStyle = 'none';
+            childList.style.paddingLeft = '0';
+            
+            childComponents.forEach(child => {
+                buildTree(child, childList, depth + 1);
+            });
+            listItem.appendChild(childList);
+        }
+    }
 }
 
 // Atualizar interface
@@ -4015,7 +4300,6 @@ function logToConsole(message, type = 'info') {
 // Coletar dados do projeto atual
 function collectProjectData() {
     const canvas = document.getElementById("designer-canvas");
-    const components = canvas.querySelectorAll(".designer-component");
     
     const projectData = {
         version: "1.0.0",
@@ -4028,27 +4312,46 @@ function collectProjectData() {
         globalEvents: globalEvents || {},
         variables: projectVariables || {}
     };
+
+    // Get only top-level components
+    const topLevelComponents = Array.from(canvas.children).filter(el => el.classList.contains('designer-component'));
     
-    components.forEach(component => {
-        const componentData = {
-            id: component.dataset.componentId,
-            type: component.dataset.componentType,
-            position: {
-                x: parseInt(component.style.left) || 0,
-                y: parseInt(component.style.top) || 0
-            },
-            size: {
-                width: component.style.width || "auto",
-                height: component.style.height || "auto"
-            },
-            properties: extractComponentProperties(component),
-            events: extractComponentEvents(component)
-        };
-        
-        projectData.components.push(componentData);
+    topLevelComponents.forEach(component => {
+        projectData.components.push(serializeComponent(component));
     });
     
     return projectData;
+}
+
+function serializeComponent(component) {
+    const componentData = {
+        id: component.dataset.componentId,
+        type: component.dataset.componentType,
+        position: {
+            x: parseInt(component.style.left) || 0,
+            y: parseInt(component.style.top) || 0
+        },
+        size: {
+            width: component.style.width || "auto",
+            height: component.style.height || "auto"
+        },
+        properties: extractComponentProperties(component),
+        events: extractComponentEvents(component),
+        children: [] // Add children array
+    };
+
+    // If it's a container, serialize its children
+    if (component.dataset.componentType === 'div') {
+        const containerElement = component.querySelector('.component-container');
+        if (containerElement) {
+            const childComponents = Array.from(containerElement.children).filter(el => el.classList.contains('designer-component'));
+            childComponents.forEach(child => {
+                componentData.children.push(serializeComponent(child));
+            });
+        }
+    }
+
+    return componentData;
 }
 
 // Extrair propriedades do componente
@@ -4075,13 +4378,15 @@ function extractComponentEvents(component) {
 }
 
 // Carregar componentes do projeto
-function loadProjectComponents(components) {
-    const canvas = document.getElementById('designer-canvas');
+function loadProjectComponents(components, parentElement) {
+    const targetParent = parentElement || document.getElementById('designer-canvas');
     
-    // Esconder placeholder
-    const placeholder = canvas.querySelector('.canvas-placeholder');
-    if (placeholder) {
-        placeholder.style.display = 'none';
+    // Hide placeholder if we are loading into the main canvas
+    if (!parentElement) {
+        const placeholder = targetParent.querySelector('.canvas-placeholder');
+        if (placeholder) {
+            placeholder.style.display = 'none';
+        }
     }
     
     components.forEach(componentData => {
@@ -4100,26 +4405,30 @@ function loadProjectComponents(components) {
         
         // Gerar HTML do componente
         const html = generateComponentHTML(componentDef, componentData.properties);
-        wrapper.innerHTML = html + '<div class="resize-handle"></div>';
+        wrapper.innerHTML = html + '<div class="resize-handle"></div><div class="move-handle">✢</div>';
         
+        // If it's a container, add class and styles
+        if (componentData.type === 'div') {
+            const innerElement = wrapper.firstElementChild;
+            innerElement.classList.add('component-container');
+            innerElement.style.position = 'relative';
+            innerElement.style.overflow = 'hidden';
+        }
+
         // Aplicar propriedades
         applyComponentStyles(wrapper, componentData.properties);
         
         // Configurar eventos
         setupComponentEvents(wrapper);
         
-        // Adicionar ao canvas
-        canvas.appendChild(wrapper);
+        // Adicionar ao parente
+        targetParent.appendChild(wrapper);
+
+        // Load children recursively
+        if (componentData.children && componentData.children.length > 0) {
+            loadProjectComponents(componentData.children, wrapper.firstElementChild);
+        }
     });
-    
-    // Atualizar contador
-    if (components.length > 0) {
-        const maxId = Math.max(...components.map(c => {
-            const match = c.id.match(/_(\d+)$/);
-            return match ? parseInt(match[1]) : 0;
-        }));
-        componentCounter = Math.max(componentCounter, maxId);
-    }
 }
 
 // Exportar projeto completo
