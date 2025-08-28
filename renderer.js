@@ -1136,10 +1136,10 @@ function populateObjectInspector(component) {
 
         const flexboxHTML = `
             <div class="property-group">
-                <div class="property-group-title">Layout Flexbox</div>
+                <div class="property-group-title"><strong>Layout Flexbox<strong></div>
                 
                 <div class="property-item">
-                    <label class="property-label">Direção (flexDirection)</label>
+                    <label class="property-label">Direção</label>
                     <select class="property-input" data-property="flexDirection">
                         <option value="row" ${flexProps.flexDirection === 'row' ? 'selected' : ''}>Row</option>
                         <option value="column" ${flexProps.flexDirection === 'column' ? 'selected' : ''}>Column</option>
@@ -1149,7 +1149,7 @@ function populateObjectInspector(component) {
                 </div>
 
                 <div class="property-item">
-                    <label class="property-label">Justificar Conteúdo (justifyContent)</label>
+                    <label class="property-label">Main Axis</label>
                     <select class="property-input" data-property="justifyContent">
                         <option value="flex-start" ${flexProps.justifyContent === 'flex-start' ? 'selected' : ''}>Start</option>
                         <option value="flex-end" ${flexProps.justifyContent === 'flex-end' ? 'selected' : ''}>End</option>
@@ -1161,7 +1161,7 @@ function populateObjectInspector(component) {
                 </div>
 
                 <div class="property-item">
-                    <label class="property-label">Alinhar Itens (alignItems)</label>
+                    <label class="property-label">Cross Axis</label>
                     <select class="property-input" data-property="alignItems">
                         <option value="flex-start" ${flexProps.alignItems === 'flex-start' ? 'selected' : ''}>Start</option>
                         <option value="flex-end" ${flexProps.alignItems === 'flex-end' ? 'selected' : ''}>End</option>
@@ -1172,7 +1172,7 @@ function populateObjectInspector(component) {
                 </div>
 
                 <div class="property-item">
-                    <label class="property-label">Quebra de Linha (flexWrap)</label>
+                    <label class="property-label">Quebra de Linha</label>
                     <select class="property-input" data-property="flexWrap">
                         <option value="nowrap" ${flexProps.flexWrap === 'nowrap' ? 'selected' : ''}>No Wrap</option>
                         <option value="wrap" ${flexProps.flexWrap === 'wrap' ? 'selected' : ''}>Wrap</option>
@@ -1181,7 +1181,7 @@ function populateObjectInspector(component) {
                 </div>
 
                 <div class="property-item">
-                    <label class="property-label">Espaçamento (gap)</label>
+                    <label class="property-label">Espaçamento</label>
                     <input type="text" class="property-input" data-property="gap" value="${flexProps.gap}" placeholder="e.g., 10px">
                 </div>
 
