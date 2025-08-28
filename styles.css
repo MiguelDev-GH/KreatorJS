@@ -1533,7 +1533,7 @@ button[style*="font-size: 12px"]:hover {
     background-color: #007acc;
     border: 1px solid #ffffff;
     left: 50%;
-    bottom: -30px;
+    top: 5px;
     transform: translateX(-50%);
     cursor: move;
     opacity: 0;
