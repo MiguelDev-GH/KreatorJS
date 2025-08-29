@@ -3688,7 +3688,7 @@ function packageProject() {
 // Gerar código HTML
 function generateHTML() {
     const canvas = document.getElementById('designer-canvas');
-    const components = canvas.querySelectorAll('.designer-component');
+    const components = Array.from(canvas.children).filter(el => el.classList.contains('designer-component'));
     
     let html = '<div style="position: relative; width: 100%; height: 100vh;">\n';
     
